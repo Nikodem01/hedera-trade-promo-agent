@@ -1,5 +1,10 @@
 import { AgentMode } from "@hashgraph/hedera-agent-kit";
-import { allCorePlugins } from "@hashgraph/hedera-agent-kit/plugins";
+import {
+  allCorePlugins,
+  MINT_FUNGIBLE_TOKEN_TOOL,
+  TRANSFER_HBAR_TOOL,
+} from "@hashgraph/hedera-agent-kit/plugins";
+import { HcsAuditTrailHook } from "@hashgraph/hedera-agent-kit/hooks";
 import { HederaAIToolkit } from "@hashgraph/hedera-agent-kit-ai-sdk";
 import { anthropic } from "@ai-sdk/anthropic";
 import {
@@ -9,17 +14,22 @@ import {
   type ModelMessage,
 } from "ai";
 import { getOperatorClient } from "@/lib/hedera/client";
-import { SYSTEM_PROMPT } from "@/lib/agent/prompts";
+import { buildSystemPrompt } from "@/lib/agent/prompts";
 import { tppEvaluatorPlugin } from "@/lib/plugins/tpp-evaluator";
 
 /**
  * The single agent loop. Sonnet 4.6 orchestrates; the Hedera Agent Kit tools
- * execute on-chain in AUTONOMOUS mode via the toolkit middleware. The toolkit
- * must be wired both ways — `middleware` (executes the tx) and `getTools`
- * (declares the tools to the model).
+ * execute on-chain in AUTONOMOUS mode. The HcsAuditTrailHook enforces an
+ * immutable HCS audit entry for every fund-moving / token-minting tool call,
+ * independent of what the model decides to log.
  */
 export function runAgent(messages: ModelMessage[]) {
   const client = getOperatorClient();
+
+  const topicId = process.env.HCS_TOPIC_ID;
+  const hooks = topicId
+    ? [new HcsAuditTrailHook([TRANSFER_HBAR_TOOL, MINT_FUNGIBLE_TOKEN_TOOL], topicId)]
+    : [];
 
   const toolkit = new HederaAIToolkit({
     client,
@@ -29,6 +39,7 @@ export function runAgent(messages: ModelMessage[]) {
       context: {
         mode: AgentMode.AUTONOMOUS,
         accountId: process.env.HEDERA_ACCOUNT_ID,
+        hooks,
       },
     },
   });
@@ -40,7 +51,7 @@ export function runAgent(messages: ModelMessage[]) {
 
   return streamText({
     model,
-    system: SYSTEM_PROMPT,
+    system: buildSystemPrompt(),
     messages,
     tools: toolkit.getTools(),
     stopWhen: stepCountIs(12),

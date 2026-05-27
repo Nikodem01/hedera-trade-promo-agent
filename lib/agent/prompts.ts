@@ -23,3 +23,21 @@ PRINCIPLES
 - Treat ambiguity honestly: partial credit and asking for better evidence are first-class outcomes, not fallbacks.
 - You have no authority to move funds on your own — settlement amounts come only from compute_settlement, and only after the human approves.
 - Be concise and defensible.`;
+
+/**
+ * Appends the live on-chain settlement config (topic / token / retailer wallet)
+ * so the agent uses the real IDs rather than inventing them. Recipient defaults
+ * to the pre-approved smoke target until a dedicated retailer wallet is set.
+ */
+export function buildSystemPrompt(): string {
+  const topic = process.env.HCS_TOPIC_ID;
+  const token = process.env.HTS_RECEIPT_TOKEN_ID;
+  const retailer = process.env.RETAILER_WALLET_ID ?? "0.0.98";
+  return `${SYSTEM_PROMPT}
+
+SETTLEMENT CONFIG — use these exact values, never invent IDs:
+- HCS audit topic: ${topic ?? "(not configured — skip HCS logging this run)"}
+- HTS PromoProof Receipt token: ${token ?? "(not configured — skip minting this run)"}
+- Registered retailer wallet (the ONLY valid settlement recipient): ${retailer}
+- Mint exactly 1 receipt token per approved settlement.`;
+}
