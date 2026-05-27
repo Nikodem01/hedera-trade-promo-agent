@@ -1,0 +1,27 @@
+TRADE PROMOTION AGREEMENT — END-CAP DISPLAY
+Brand: Mondelez International ("Brand")  |  Retailer: Walmart Supercenter #2643 ("Retailer")
+Promotion: Q2 OREO End-Cap Feature  |  Agreement No. WMT-OREO-Q2-2026
+
+SECTION 1. TERM
+1.1  The promotional display shall be installed and continuously maintained from
+     May 1, 2026 through May 31, 2026 inclusive (the "Promotion Window").
+
+SECTION 2. EXECUTION REQUIREMENTS
+2.1  Placement. The feature shall occupy a full end-cap at the head of the cookie /
+     cracker aisle. Aisle-side or in-line shelf placement does not satisfy this Section.
+2.2  Facings. A minimum of four (4) product facings of OREO (any SKU) shall be
+     presented across the end-cap.
+2.3  Branding. The end-cap shall display the official OREO branded header card with
+     the OREO wordmark clearly legible.
+2.4  Stock. The display shall be reasonably stocked (no predominantly empty shelves)
+     for the duration of the Promotion Window.
+
+SECTION 3. PROOF OF PERFORMANCE
+3.1  Retailer shall submit at least one in-store photograph of the installed end-cap
+     together with a short narrative attesting to compliance with Section 2.
+
+SECTION 4. SETTLEMENT
+4.1  Upon verified compliance, Brand shall pay Retailer a promotion fee of up to
+     30 HBAR (testnet demonstration denomination).
+4.2  Partial compliance may be settled at a proportionate credit at Brand's reasonable
+     determination.
