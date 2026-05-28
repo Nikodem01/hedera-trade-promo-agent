@@ -106,3 +106,21 @@ Hedera testnet free. Vercel free hobby tier. Anthropic API expected $15–25 tot
 ## 11. No silent action
 
 Non-obvious changes (deleting fixtures, rewriting prompts, retiring a tool, changing the agent loop topology) log to `docs/decisions.md` with reason.
+
+## 12. Git & delivery workflow (durable authorization — don't ask per action)
+
+I run the local repository autonomously. Stop asking "want me to commit / push / open a PR?" — the answer is standing yes. Only the irreversible, shared-history, or outward-facing steps stay with the founder (§5, §8).
+
+**Do without asking, as a matter of course:**
+- Work on a feature/topic branch; never commit to `main` directly. If on `main`, branch first.
+- Commit at each coherent, verified checkpoint — small, focused commits, not one mega-commit at the end. Conventional Commits (`feat:`/`fix:`/`docs:`/`refactor:`/`test:`/`chore:`), imperative subject, body explaining *why*; end with the `Co-Authored-By` trailer.
+- Push the working branch to its remote (create it / set upstream as needed). Pushing a topic branch is backup, not release.
+- Open or update a PR (draft by default) with a clear summary and test/verification evidence in the body.
+- Keep the branch current with `main` (rebase/merge) when it falls behind.
+
+**Confirm with the founder first (genuinely irreversible / outward-facing):**
+- Merging a PR into `main` — the integration gate; once deployed it's prod. A founder "ship it" / "merge it" is sufficient standing authorization for that PR.
+- Force-push, rewriting shared history, branch/tag deletion, hard resets that discard committed work.
+- Tags/releases, anything that triggers a deploy, publishes a package, or is otherwise outward-facing (per §8: Vercel deploy, video publish, X post, bounty submit).
+
+**Defaults:** never commit secrets or `.env*`; if a commit/push is blocked (hooks, conflicts, auth), report the error and stop — don't bypass with `--no-verify` or `--force` unless explicitly told. After committing/pushing, report the short SHA + branch in one line and move on; don't turn it into a question.
