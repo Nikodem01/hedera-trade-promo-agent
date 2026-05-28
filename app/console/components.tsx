@@ -7,6 +7,18 @@ import type {
   SettlementProposalType,
 } from "@/lib/plugins/tpp-evaluator/schemas";
 import { HASHSCAN, SCENARIOS, type Scenario, type ToolCall } from "./data";
+
+/** Minimal header shape the verdict/settlement cards read — satisfied by both the
+ * demo Scenario and a synthesized live claim. */
+export type CardScenario = {
+  retailer: string;
+  promotion: string;
+  claimId?: string;
+  contractId?: string;
+  maxHbar?: number;
+};
+
+export type HashScanLinks = typeof HASHSCAN;
 import {
   DECISION_META,
   COLORS,
@@ -224,7 +236,7 @@ export function ReasoningBlock({ children, label = "Agent reasoning" }: { childr
   );
 }
 
-export function VerdictCard({ assessment, scenario, revised = false }: { assessment: ComplianceAssessmentType; scenario: Scenario; revised?: boolean }) {
+export function VerdictCard({ assessment, scenario, revised = false }: { assessment: ComplianceAssessmentType; scenario: CardScenario; revised?: boolean }) {
   const meta = DECISION_META[assessment.decision];
   return (
     <article className="rounded-[5px] overflow-hidden anim-reveal" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2), 0 10px 30px rgba(22,22,26,0.05)" }}>
@@ -240,7 +252,7 @@ export function VerdictCard({ assessment, scenario, revised = false }: { assessm
         </div>
         <div className="hidden md:flex flex-col items-end leading-tight">
           <span className="mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Claim</span>
-          <span className="mono text-[11.5px] font-medium">{scenario.claimId}</span>
+          <span className="mono text-[11.5px] font-medium">{scenario.claimId ?? "—"}</span>
         </div>
       </div>
 
@@ -337,7 +349,7 @@ export function EvidenceRequest({ text, onSend, replied }: { text?: string; onSe
   );
 }
 
-export function PreSettlement({ amount, scenario, onApprove }: { amount: number; scenario: Scenario; onApprove: () => void }) {
+export function PreSettlement({ amount, scenario, onApprove }: { amount: number; scenario: CardScenario; onApprove: () => void }) {
   return (
     <div className="rounded-[4px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
       <div className="px-4 md:px-5 py-3 flex items-center justify-between hairline-b" style={{ background: "var(--paper-2)" }}>
@@ -354,7 +366,7 @@ export function PreSettlement({ amount, scenario, onApprove }: { amount: number;
             <span className="mono text-[34px] font-semibold tabular-nums leading-none" style={{ letterSpacing: "-0.02em" }}>{amount}</span>
             <span className="mono text-[14px] font-medium" style={{ color: "var(--ink-mute)" }}>HBAR</span>
           </div>
-          <span className="text-[11.5px] mt-1.5" style={{ color: "var(--ink-faint)" }}>Capped at {scenario.maxHbar} HBAR · contract {scenario.contractId}</span>
+          <span className="text-[11.5px] mt-1.5" style={{ color: "var(--ink-faint)" }}>Capped at {scenario.maxHbar ?? "?"} HBAR · contract {scenario.contractId ?? "—"}</span>
         </div>
         <button onClick={onApprove} className="btn-primary mono text-[12px] uppercase tracking-[0.14em] font-semibold px-5 py-3.5 rounded-[3px] inline-flex items-center gap-2.5" style={{ background: "var(--emerald)", color: "white", boxShadow: "0 6px 18px rgba(11,93,59,0.18), inset 0 -1px 0 rgba(0,0,0,0.18)" }}>
           Approve &amp; settle
@@ -380,8 +392,7 @@ function HashScanLink({ label, sub, id, href }: { label: string; sub: string; id
   );
 }
 
-export function SettlementReceipt({ proposal, scenario, partial }: { proposal: SettlementProposalType; scenario: Scenario; partial: boolean }) {
-  const links = HASHSCAN;
+export function SettlementReceipt({ proposal, scenario, partial, links = HASHSCAN }: { proposal: SettlementProposalType; scenario: CardScenario; partial: boolean; links?: HashScanLinks }) {
   return (
     <div className="relative rounded-[5px] overflow-hidden anim-seal" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1.5px var(--emerald), inset 0 0 0 5px var(--paper), inset 0 0 0 6px rgba(11,93,59,0.18), 0 16px 36px rgba(11,93,59,0.10)" }}>
       <div className="absolute right-4 top-4 z-0 stamp-in pointer-events-none select-none">
@@ -426,7 +437,7 @@ export function SettlementReceipt({ proposal, scenario, partial }: { proposal: S
   );
 }
 
-export function RejectAuditCard({ scenario: _scenario }: { scenario: Scenario }) {
+export function RejectAuditCard({ scenario: _scenario, links = HASHSCAN }: { scenario: CardScenario; links?: HashScanLinks }) {
   return (
     <div className="rounded-[4px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
       <div className="px-5 py-3 flex items-center gap-2.5 hairline-b" style={{ background: "linear-gradient(180deg, var(--red-bg), var(--paper))" }}>
@@ -443,7 +454,7 @@ export function RejectAuditCard({ scenario: _scenario }: { scenario: Scenario })
             Threshold clause R-1 unmet. The verdict and reasoning are written to the HCS audit topic for an immutable record.
           </div>
         </div>
-        <HashScanLink label="HCS audit" sub="topic" id={HASHSCAN.hcsAuditId} href={HASHSCAN.hcsAudit} />
+        <HashScanLink label="HCS audit" sub="topic" id={links.hcsAuditId} href={links.hcsAudit} />
       </div>
     </div>
   );

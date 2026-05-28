@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -9,6 +9,21 @@ import {
   isToolOrDynamicToolUIPart,
   type UIMessage,
 } from "ai";
+import type {
+  ComplianceAssessmentType,
+  SettlementProposalType,
+} from "@/lib/plugins/tpp-evaluator/schemas";
+import { txUrl } from "@/lib/hedera/hashscan";
+import {
+  Header,
+  TimelineRow,
+  ReasoningBlock,
+  ToolChip,
+  VerdictCard,
+  SettlementReceipt,
+  type CardScenario,
+  type HashScanLinks,
+} from "@/app/console/components";
 
 export type Scenario = {
   id: string;
@@ -23,20 +38,13 @@ export type Scenario = {
 
 const HASHSCAN_RE = /(https:\/\/hashscan\.io\/\S+)/g;
 
-/** Linkify HashScan URLs (and any url) inside streamed agent text. */
 function LinkifiedText({ text }: { text: string }) {
   const parts = text.split(HASHSCAN_RE);
   return (
     <span className="whitespace-pre-wrap">
       {parts.map((p, i) =>
-        HASHSCAN_RE.test(p) ? (
-          <a
-            key={i}
-            href={p}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-emerald-400 underline decoration-dotted underline-offset-2 hover:text-emerald-300"
-          >
+        p.startsWith("https://hashscan.io/") ? (
+          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2" style={{ color: "var(--emerald)" }}>
             {p}
           </a>
         ) : (
@@ -47,66 +55,114 @@ function LinkifiedText({ text }: { text: string }) {
   );
 }
 
-function toolLabel(name: string) {
-  return name.replace(/_tool$/, "").replace(/_/g, " ");
+function parseJSON(v: unknown): Record<string, unknown> | null {
+  if (v && typeof v === "object") return v as Record<string, unknown>;
+  if (typeof v !== "string") return null;
+  try {
+    return JSON.parse(v) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
-function ToolCard({ part }: { part: Record<string, unknown> }) {
-  const name = getToolOrDynamicToolName(part as Parameters<typeof getToolOrDynamicToolName>[0]);
-  const state = String(part.state ?? "");
-  const output = part.output;
-  const input = part.input;
-  const done = state === "output-available";
-  const errored = state === "output-error";
+function txOf(out: Record<string, unknown> | null): string | undefined {
+  const raw = out?.raw as Record<string, unknown> | undefined;
+  return typeof raw?.transactionId === "string" ? raw.transactionId : undefined;
+}
 
+type ToolPart = {
+  state?: string;
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+};
+
+function shortInput(name: string, input: unknown): string {
+  if (name === "adjudicate_claim") return "contract + photo + narrative";
+  if (input == null) return "";
+  const s = typeof input === "string" ? input : JSON.stringify(input);
+  return s.length > 80 ? s.slice(0, 80) + "…" : s;
+}
+
+function shortResult(name: string, out: Record<string, unknown> | null, state?: string): string {
+  if (state === "input-available" || state === "input-streaming") return "running…";
+  if (!out) return state ?? "";
+  if (name === "adjudicate_claim") return `decision: ${out.decision} · confidence ${out.confidence}`;
+  if (name === "compute_settlement") return `${out.amount_hbar} HBAR (${out.partial_credit_pct}%)`;
+  if (typeof out.humanMessage === "string") return out.humanMessage.split("\n")[0];
+  return JSON.stringify(out).slice(0, 80);
+}
+
+function LiveToolChip({ name, part }: { name: string; part: ToolPart }) {
+  const [open, setOpen] = useState(false);
+  const out = parseJSON(part.output);
+  const state = part.state === "output-available" ? "done" : part.state === "output-error" ? "error" : "running";
   return (
-    <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 text-xs">
-      <div className="flex items-center gap-2">
-        <span
-          className={`inline-block h-2 w-2 rounded-full ${
-            errored ? "bg-red-500" : done ? "bg-emerald-500" : "bg-amber-400 animate-pulse"
-          }`}
-        />
-        <span className="font-mono font-semibold text-zinc-200">{toolLabel(name)}</span>
-        <span className="ml-auto text-[10px] uppercase tracking-wide text-zinc-500">{state}</span>
-      </div>
-      {input != null && (
-        <pre className="mt-2 max-h-32 overflow-auto rounded bg-black/40 p-2 text-[11px] text-zinc-400">
-          {JSON.stringify(input, null, 2)}
-        </pre>
-      )}
-      {done && output != null && (
-        <pre className="mt-2 max-h-72 overflow-auto rounded bg-black/40 p-2 text-[11px] text-emerald-300/90">
-          {typeof output === "string" ? output : JSON.stringify(output, null, 2)}
-        </pre>
-      )}
-      {errored && (
-        <p className="mt-2 text-red-400">{String(part.errorText ?? "tool error")}</p>
-      )}
-    </div>
+    <ToolChip
+      tool={name.replace(/_tool$/, "")}
+      args={shortInput(name, part.input)}
+      result={shortResult(name, out, part.state)}
+      state={state}
+      error={part.state === "output-error" ? part.errorText ?? "tool error" : undefined}
+      expanded={open}
+      onToggle={() => setOpen(!open)}
+    />
   );
 }
 
-function MessageView({ message }: { message: UIMessage }) {
-  const isUser = message.role === "user";
+/** Aggregate the on-chain settlement across the whole conversation for the receipt. */
+function deriveSettlement(messages: UIMessage[]): { proposal: SettlementProposalType; links: HashScanLinks; partial: boolean } | null {
+  let proposal: SettlementProposalType | null = null;
+  let topicTx: string | undefined;
+  let mintTx: string | undefined;
+  let transferTx: string | undefined;
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    for (const p of m.parts) {
+      if (!isToolOrDynamicToolUIPart(p)) continue;
+      const name = getToolOrDynamicToolName(p);
+      const out = parseJSON((p as ToolPart).output);
+      if (!out) continue;
+      if (name === "compute_settlement") proposal = out as unknown as SettlementProposalType;
+      else if (name.startsWith("submit_topic_message")) topicTx = txOf(out) ?? topicTx;
+      else if (name.startsWith("mint_fungible_token")) mintTx = txOf(out) ?? mintTx;
+      else if (name.startsWith("transfer_hbar")) transferTx = txOf(out) ?? transferTx;
+    }
+  }
+  if (!proposal || !transferTx) return null;
+  const links: HashScanLinks = {
+    hcsAudit: topicTx ? txUrl(topicTx) : "#",
+    htsReceipt: mintTx ? txUrl(mintTx) : "#",
+    hbarXfer: txUrl(transferTx),
+    hcsAuditId: topicTx ?? "—",
+    htsReceiptId: mintTx ?? "—",
+    hbarXferId: transferTx,
+    operatorId: "",
+  };
+  return { proposal, links, partial: proposal.partial_credit_pct < 100 };
+}
+
+function ClaimPickerLive({ scenarios, active, busy, onSelect }: { scenarios: Scenario[]; active: string | null; busy: boolean; onSelect: (s: Scenario) => void }) {
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[85%] space-y-2 rounded-2xl px-4 py-3 text-sm ${
-          isUser ? "bg-sky-600/20 text-sky-100" : "bg-zinc-800/60 text-zinc-100"
-        }`}
-      >
-        {message.parts.map((part, i) => {
-          if (isTextUIPart(part)) {
-            return part.text ? <LinkifiedText key={i} text={part.text} /> : null;
-          }
-          if (isToolOrDynamicToolUIPart(part)) {
-            return <ToolCard key={i} part={part as unknown as Record<string, unknown>} />;
-          }
-          return null;
+    <section className="max-w-[1100px] mx-auto px-6 md:px-8 pt-6 pb-4 w-full">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="mono text-[10.5px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--ink-faint)" }}>Active claims · awaiting adjudication</h2>
+        <span className="mono text-[10.5px] uppercase tracking-[0.16em]" style={{ color: "var(--ink-faint)" }}>{scenarios.length} pending</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {scenarios.map((s) => {
+          const isActive = active === s.id;
+          return (
+            <button key={s.id} onClick={() => onSelect(s)} disabled={busy} className="text-left p-4 rounded-[4px] transition-all disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: isActive ? "var(--paper)" : "var(--paper-2)", boxShadow: isActive ? "inset 0 0 0 1.5px var(--ink), 0 6px 18px rgba(22,22,26,0.06)" : "inset 0 0 0 1px var(--keyline)" }}>
+              <div className="text-[14px] font-semibold leading-tight">{s.retailer}</div>
+              <div className="mt-2 text-[13px] leading-snug" style={{ color: "var(--ink-2)" }}>{s.promo}</div>
+              <div className="serif text-[10.5px] italic mt-2" style={{ color: "var(--ink-faint)" }}>{s.expect}</div>
+            </button>
+          );
         })}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -115,84 +171,125 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
     transport: new DefaultChatTransport({ api: "/api/agent" }),
   });
   const [input, setInput] = useState("");
+  const [active, setActive] = useState<Scenario | null>(null);
   const busy = status === "submitted" || status === "streaming";
 
   function submitClaim(s: Scenario) {
+    setActive(s);
     sendMessage({
       text:
         `New trade-promotion claim from ${s.retailer} — ${s.promo}. Adjudicate it.\n\n` +
-        `CONTRACT:\n${s.contractText}\n\n` +
-        `IMAGE_REF: ${s.imageRef}\n` +
-        `NARRATIVE: ${s.narrative}`,
+        `CONTRACT:\n${s.contractText}\n\nIMAGE_REF: ${s.imageRef}\nNARRATIVE: ${s.narrative}`,
     });
   }
-
   function send() {
-    const text = input.trim();
-    if (!text) return;
-    sendMessage({ text });
+    const t = input.trim();
+    if (!t) return;
+    sendMessage({ text: t });
     setInput("");
   }
 
+  const settlement = useMemo(() => deriveSettlement(messages), [messages]);
+  const header: CardScenario | null = active
+    ? { retailer: active.retailer, promotion: active.promo, claimId: `CLM-${active.id}` }
+    : null;
+
+  let adjudicationsSeen = 0;
+
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 p-4 sm:p-6">
-      <header className="border-b border-zinc-800 pb-4">
-        <h1 className="text-xl font-semibold tracking-tight text-zinc-100">
-          PromoProof <span className="text-zinc-500">· trade-promotion settlement agent</span>
-        </h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Adjudicates retailer proof-of-performance against bespoke contracts and settles on Hedera —
-          HCS audit, HTS receipt, HBAR transfer. Settlement requires explicit approval.
-        </p>
-      </header>
+    <>
+      <Header />
+      <ClaimPickerLive scenarios={scenarios} active={active?.id ?? null} busy={busy} onSelect={submitClaim} />
 
-      <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Submit a claim
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {scenarios.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => submitClaim(s)}
-              disabled={busy}
-              className="group rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 text-left transition hover:border-zinc-600 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <div className="text-sm font-medium text-zinc-100">{s.promo}</div>
-              <div className="text-xs text-zinc-400">{s.retailer}</div>
-              <div className="mt-2 text-[11px] text-zinc-500">{s.expect}</div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="flex-1 space-y-3 overflow-y-auto rounded-xl border border-zinc-800 bg-black/20 p-4">
+      <main className="flex-1 max-w-[1100px] w-full mx-auto px-6 md:px-8 pt-2 pb-10">
         {messages.length === 0 ? (
-          <p className="py-12 text-center text-sm text-zinc-600">
-            Pick a claim above to start an adjudication.
-          </p>
+          <div className="rounded-[4px] py-14 px-6 text-center mt-4" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            <div className="text-[15px] font-semibold mb-1.5">No claim selected</div>
+            <div className="text-[13px] max-w-[440px] mx-auto" style={{ color: "var(--ink-mute)" }}>
+              Pick a claim above to load the bespoke promotion contract, judge the proof photo against it, and prepare a Hedera settlement.
+            </div>
+          </div>
         ) : (
-          messages.map((m) => <MessageView key={m.id} message={m} />)
-        )}
-        {busy && <p className="text-xs text-zinc-500">PromoProof is working…</p>}
-      </section>
+          <section className="pt-5 relative rail">
+            {messages.map((m) => {
+              if (m.role === "user") {
+                const text = m.parts.filter(isTextUIPart).map((p) => p.text).join(" ");
+                const isClaim = text.startsWith("New trade-promotion claim");
+                return (
+                  <TimelineRow key={m.id} kind="submission" time="analyst">
+                    <div className="rounded-[4px] p-3 text-[13px]" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)", color: "var(--ink-2)" }}>
+                      {isClaim ? `Claim submitted${active ? ` · ${active.retailer} — ${active.promo}` : ""}` : text}
+                    </div>
+                  </TimelineRow>
+                );
+              }
+              return (
+                <div key={m.id}>
+                  {m.parts.map((part, i) => {
+                    if (isTextUIPart(part)) {
+                      return part.text ? (
+                        <TimelineRow key={i} kind="reason" time="reasoning">
+                          <ReasoningBlock><LinkifiedText text={part.text} /></ReasoningBlock>
+                        </TimelineRow>
+                      ) : null;
+                    }
+                    if (isToolOrDynamicToolUIPart(part)) {
+                      const name = getToolOrDynamicToolName(part);
+                      const tp = part as ToolPart;
+                      const out = parseJSON(tp.output);
+                      if (name === "adjudicate_claim" && tp.state === "output-available" && out && header) {
+                        const revised = adjudicationsSeen++ > 0;
+                        return (
+                          <TimelineRow key={i} kind="verdict" time="finding">
+                            <VerdictCard assessment={out as unknown as ComplianceAssessmentType} scenario={header} revised={revised} />
+                          </TimelineRow>
+                        );
+                      }
+                      return (
+                        <TimelineRow key={i} kind="tool" time="tool call">
+                          <LiveToolChip name={name} part={tp} />
+                        </TimelineRow>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              );
+            })}
 
-      <div className="flex gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !busy && send()}
-          placeholder="Approve & settle, or provide more evidence (e.g. a POS timestamp)…"
-          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
-        />
-        <button
-          onClick={send}
-          disabled={busy || !input.trim()}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Send
-        </button>
+            {settlement && header && (
+              <TimelineRow kind="settle" time="settled" last>
+                <SettlementReceipt proposal={settlement.proposal} scenario={header} partial={settlement.partial} links={settlement.links} />
+              </TimelineRow>
+            )}
+
+            {busy && (
+              <div className="flex items-center gap-2 mono text-[10.5px] uppercase tracking-[0.14em] pl-10 pb-4" style={{ color: "var(--emerald)" }}>
+                <i className="block w-1.5 h-1.5 rounded-full pulse-dot" style={{ background: "var(--emerald)" }} />
+                PromoProof is working…
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+
+      <div className="hairline-t" style={{ background: "var(--paper-2)" }}>
+        <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-3 flex items-center gap-3">
+          <div className="flex-1 flex items-stretch rounded-[4px]" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", opacity: busy ? 0.6 : 1 }}>
+            <input
+              className="field-bare flex-1 px-3 py-2.5 text-[13px]"
+              placeholder={busy ? "PromoProof is working…" : "Approve & settle, or provide more evidence (e.g. a POS timestamp)…"}
+              value={input}
+              disabled={busy}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !busy && send()}
+            />
+          </div>
+          <button onClick={send} disabled={busy || !input.trim()} className="mono text-[11px] uppercase tracking-[0.14em] font-semibold px-4 py-2.5 rounded-[3px]" style={{ background: input.trim() && !busy ? "var(--emerald)" : "var(--paper-sunken)", color: input.trim() && !busy ? "white" : "var(--ink-faint)", cursor: input.trim() && !busy ? "pointer" : "not-allowed" }}>
+            Send
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
