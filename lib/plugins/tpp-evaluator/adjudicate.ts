@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
+import { visionModel } from "@/lib/agent/model";
 import { BaseTool, type Context } from "@hashgraph/hedera-agent-kit";
 import type { Client } from "@hiero-ledger/sdk";
 import { ComplianceAssessment, type ComplianceAssessmentType } from "./schemas";
@@ -32,20 +32,29 @@ const adjudicateParameters = (_context: Context = {}) =>
 
 type AdjudicateParams = z.infer<ReturnType<typeof adjudicateParameters>>;
 
-const ADJUDICATOR_SYSTEM = `You are the adjudication core of PromoProof, evaluating retailer proof-of-performance for trade promotions.
+const ADJUDICATOR_SYSTEM = `You are the adjudication core of PromoProof, evaluating retailer proof-of-performance for trade promotions. You are given a bespoke promotion contract (prose), a proof photo, and the retailer's narrative. Reason — do not merely extract. Work through these phases in order:
 
-You are given a bespoke promotion contract (prose), a proof photo, and the retailer's narrative. Reason — do not merely extract:
-- Read the contract and identify each distinct execution requirement, noting the clause it comes from.
-- Examine the photo carefully and judge each requirement: met, partial, unmet, or indeterminate (when the photo cannot settle it).
-- Treat ambiguity honestly. Poor lighting, wrong angle, partial occlusion, or a missing timestamp are reasons to mark a criterion indeterminate or to request more evidence — not to silently approve or reject.
-- Choose ONE overall decision:
+PHASE 1 — OBSERVE (ground yourself in the image before you judge it):
+- Describe the photo's layout by region (foreground/background; left/center/right; shelf levels or fixtures present).
+- List only what is actually visible: products, brands, signage/headers, facing counts you can literally count, and the placement type (end-cap, freestanding display, in-aisle shelf, checkout lane, …).
+- Note image-quality limits (lighting, angle, occlusion, resolution) and explicitly state what is NOT determinable from the image (e.g. dates, what is off-frame).
+- Do not consult the contract in this phase. Report observations only.
+
+PHASE 2 — EXTRACT:
+- Read the contract and enumerate each distinct execution requirement, noting the exact clause reference it comes from.
+
+PHASE 3 — RECONCILE:
+- For each requirement, compare it strictly against your Phase 1 observations. Judge met / partial / unmet / indeterminate. Mark indeterminate when the photo genuinely cannot settle it (e.g. a date) — do not guess. Treat poor lighting/angle/occlusion as grounds for indeterminate or requesting evidence, never for a silent pass.
+
+PHASE 4 — DECIDE — choose ONE overall decision:
   - approve: all material requirements clearly met.
-  - partial_credit: some requirements met, others not; recommend a fair credit percentage proportional to what was delivered.
-  - reject: material requirements clearly unmet.
-  - request_more_evidence: the photo/narrative is borderline and a specific, obtainable piece of evidence would resolve it. State exactly what to provide.
+  - partial_credit: some met, others not; recommend a fair credit percentage proportional to what was delivered.
+  - reject: a material/threshold requirement clearly unmet.
+  - request_more_evidence: borderline, and a specific obtainable piece of evidence would resolve it. State exactly what to provide.
   - escalate_human: genuinely too uncertain or out-of-policy to recommend.
-- Extract the contract's maximum settlement amount in HBAR.
-- Write a concise, defensible reasoning summary. Cite specific clauses.`;
+Then extract the contract's maximum settlement amount in HBAR and write a concise, defensible reasoning summary that cites specific clauses.
+
+ANTI-HALLUCINATION: never assert a product, facing count, brand, or signage that you did not explicitly identify in Phase 1. If you cannot see it, it is unmet or indeterminate — not met.`;
 
 async function loadImage(
   ref: string,
@@ -65,9 +74,16 @@ export async function adjudicate(
   const { image, mediaType } = await loadImage(params.image_ref);
 
   const { object } = await generateObject({
-    model: anthropic("claude-opus-4-7"),
+    model: visionModel(),
     schema: ComplianceAssessment,
     system: ADJUDICATOR_SYSTEM,
+    // HIGH thinking deepens multi-constraint compliance reasoning (Gemini 3.x);
+    // ignored by providers that don't use the `google` namespace. maxRetries gives
+    // exponential-backoff resilience against free-tier 429s.
+    maxRetries: 4,
+    providerOptions: {
+      google: { thinkingConfig: { thinkingLevel: "high" } },
+    },
     messages: [
       {
         role: "user",
