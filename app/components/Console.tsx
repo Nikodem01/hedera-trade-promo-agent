@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -17,13 +17,16 @@ import { txUrl } from "@/lib/hedera/hashscan";
 import {
   Header,
   TimelineRow,
-  ReasoningBlock,
   ToolChip,
   VerdictCard,
   SettlementReceipt,
+  PreSettlement,
   type CardScenario,
   type HashScanLinks,
 } from "@/app/console/components";
+import { AuditLedger } from "@/app/console/AuditLedger";
+import { EvidencePanel, EvidenceRequestPanel } from "@/app/console/Evidence";
+import { ProseMarkdown } from "@/app/console/Markdown";
 
 export type Scenario = {
   id: string;
@@ -35,25 +38,6 @@ export type Scenario = {
   expect: string;
   contractText: string;
 };
-
-const HASHSCAN_RE = /(https:\/\/hashscan\.io\/\S+)/g;
-
-function LinkifiedText({ text }: { text: string }) {
-  const parts = text.split(HASHSCAN_RE);
-  return (
-    <span className="whitespace-pre-wrap">
-      {parts.map((p, i) =>
-        p.startsWith("https://hashscan.io/") ? (
-          <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2" style={{ color: "var(--emerald)" }}>
-            {p}
-          </a>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </span>
-  );
-}
 
 function parseJSON(v: unknown): Record<string, unknown> | null {
   if (v && typeof v === "object") return v as Record<string, unknown>;
@@ -142,6 +126,46 @@ function deriveSettlement(messages: UIMessage[]): { proposal: SettlementProposal
   return { proposal, links, partial: proposal.partial_credit_pct < 100 };
 }
 
+/** A computed settlement awaiting the human consent gate: compute_settlement has
+ * run with a payable amount, but no transfer_hbar has happened yet. */
+function derivePendingSettlement(messages: UIMessage[]): SettlementProposalType | null {
+  let proposal: SettlementProposalType | null = null;
+  let settled = false;
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    for (const p of m.parts) {
+      if (!isToolOrDynamicToolUIPart(p)) continue;
+      const name = getToolOrDynamicToolName(p);
+      const out = parseJSON((p as ToolPart).output);
+      if (!out) continue;
+      if (name === "compute_settlement") proposal = out as unknown as SettlementProposalType;
+      else if (name.startsWith("transfer_hbar")) settled = true;
+    }
+  }
+  if (!proposal || settled || proposal.amount_hbar <= 0) return null;
+  return proposal;
+}
+
+/** The most recent adjudication's decision + evidence ask — drives the live
+ * negotiation panel when the agent is waiting for more evidence. */
+function lastAdjudication(messages: UIMessage[]): { decision: string; evidence_requested?: string } | null {
+  let result: { decision: string; evidence_requested?: string } | null = null;
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    for (const p of m.parts) {
+      if (!isToolOrDynamicToolUIPart(p)) continue;
+      if (getToolOrDynamicToolName(p) !== "adjudicate_claim") continue;
+      const out = parseJSON((p as ToolPart).output);
+      if (out && typeof out.decision === "string") {
+        result = { decision: out.decision, evidence_requested: typeof out.evidence_requested === "string" ? out.evidence_requested : undefined };
+      }
+    }
+  }
+  return result;
+}
+
+const UPLOAD_REF_RE = /NEW_IMAGE_REF:\s*upload:([\w.-]+)/;
+
 function ClaimPickerLive({ scenarios, active, busy, onSelect }: { scenarios: Scenario[]; active: string | null; busy: boolean; onSelect: (s: Scenario) => void }) {
   return (
     <section className="max-w-[1100px] mx-auto px-6 md:px-8 pt-6 pb-4 w-full">
@@ -172,7 +196,16 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
   });
   const [input, setInput] = useState("");
   const [active, setActive] = useState<Scenario | null>(null);
+  const [highlightedClause, setHighlightedClause] = useState<string | null>(null);
   const busy = status === "submitted" || status === "streaming";
+
+  // Re-read the on-chain ledger each time a run finishes (records are confirmed by then).
+  const [auditTick, setAuditTick] = useState(0);
+  const prevBusy = useRef(busy);
+  useEffect(() => {
+    if (prevBusy.current && !busy) setAuditTick((t) => t + 1);
+    prevBusy.current = busy;
+  }, [busy]);
 
   function submitClaim(s: Scenario) {
     setActive(s);
@@ -190,6 +223,12 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
   }
 
   const settlement = useMemo(() => deriveSettlement(messages), [messages]);
+  const pending = useMemo(() => derivePendingSettlement(messages), [messages]);
+  const lastAdj = useMemo(() => lastAdjudication(messages), [messages]);
+  const awaitingEvidence =
+    lastAdj?.decision === "request_more_evidence" &&
+    messages[messages.length - 1]?.role === "assistant" &&
+    !busy;
   const header: CardScenario | null = active
     ? { retailer: active.retailer, promotion: active.promo, claimId: `CLM-${active.id}` }
     : null;
@@ -215,11 +254,26 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
               if (m.role === "user") {
                 const text = m.parts.filter(isTextUIPart).map((p) => p.text).join(" ");
                 const isClaim = text.startsWith("New trade-promotion claim");
+                const uploadId = text.match(UPLOAD_REF_RE)?.[1];
+                const replyNote = text.replace(/Attaching a clearer proof photo as additional evidence\.?/, "").replace(UPLOAD_REF_RE, "").trim();
                 return (
                   <TimelineRow key={m.id} kind="submission" time="analyst">
-                    <div className="rounded-[4px] p-3 text-[13px]" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)", color: "var(--ink-2)" }}>
-                      {isClaim ? `Claim submitted${active ? ` · ${active.retailer} — ${active.promo}` : ""}` : text}
-                    </div>
+                    {isClaim && active ? (
+                      <EvidencePanel scenario={active} highlightClause={highlightedClause} />
+                    ) : uploadId ? (
+                      <div className="rounded-[4px] p-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+                        <div className="mono text-[10px] uppercase tracking-[0.14em] mb-2" style={{ color: "var(--blue)" }}>Additional evidence · clearer photo submitted</div>
+                        <div className="flex items-start gap-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`/api/uploads/${uploadId}`} alt="submitted evidence photo" className="h-20 w-20 object-cover rounded-[3px]" style={{ boxShadow: "inset 0 0 0 1px var(--keyline-2)" }} />
+                          {replyNote && <div className="text-[13px] leading-snug" style={{ color: "var(--ink-2)" }}>{replyNote}</div>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-[4px] p-3 text-[13px]" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)", color: "var(--ink-2)" }}>
+                        {text}
+                      </div>
+                    )}
                   </TimelineRow>
                 );
               }
@@ -228,8 +282,10 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
                   {m.parts.map((part, i) => {
                     if (isTextUIPart(part)) {
                       return part.text ? (
-                        <TimelineRow key={i} kind="reason" time="reasoning">
-                          <ReasoningBlock><LinkifiedText text={part.text} /></ReasoningBlock>
+                        <TimelineRow key={i} kind="reason" time="agent narrative">
+                          <div className="px-1">
+                            <ProseMarkdown>{part.text}</ProseMarkdown>
+                          </div>
                         </TimelineRow>
                       ) : null;
                     }
@@ -241,7 +297,13 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
                         const revised = adjudicationsSeen++ > 0;
                         return (
                           <TimelineRow key={i} kind="verdict" time="finding">
-                            <VerdictCard assessment={out as unknown as ComplianceAssessmentType} scenario={header} revised={revised} />
+                            <VerdictCard
+                              assessment={out as unknown as ComplianceAssessmentType}
+                              scenario={header}
+                              revised={revised}
+                              provenance={(out as { provenance?: { model: string; adjudicated_at: string; evidence_hash: string } }).provenance}
+                              onClauseClick={setHighlightedClause}
+                            />
                           </TimelineRow>
                         );
                       }
@@ -256,6 +318,22 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
                 </div>
               );
             })}
+
+            {awaitingEvidence && (
+              <TimelineRow kind="evidence" time="negotiation">
+                <EvidenceRequestPanel requested={lastAdj?.evidence_requested} onSend={(t) => sendMessage({ text: t })} busy={busy} />
+              </TimelineRow>
+            )}
+
+            {pending && !settlement && header && !busy && (
+              <TimelineRow kind="settle" time="awaiting approval">
+                <PreSettlement
+                  amount={pending.amount_hbar}
+                  scenario={{ ...header, maxHbar: pending.max_settlement_hbar, contractId: header.claimId }}
+                  onApprove={() => sendMessage({ text: "Approved. Settle on-chain now — mint the receipt and transfer the HBAR." })}
+                />
+              </TimelineRow>
+            )}
 
             {settlement && header && (
               <TimelineRow kind="settle" time="settled" last>
@@ -272,6 +350,8 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
           </section>
         )}
       </main>
+
+      <AuditLedger refreshKey={auditTick} />
 
       <div className="hairline-t" style={{ background: "var(--paper-2)" }}>
         <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-3 flex items-center gap-3">

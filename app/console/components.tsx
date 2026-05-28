@@ -236,8 +236,16 @@ export function ReasoningBlock({ children, label = "Agent reasoning" }: { childr
   );
 }
 
-export function VerdictCard({ assessment, scenario, revised = false }: { assessment: ComplianceAssessmentType; scenario: CardScenario; revised?: boolean }) {
+export function VerdictCard({ assessment, scenario, revised = false, provenance, onClauseClick }: { assessment: ComplianceAssessmentType; scenario: CardScenario; revised?: boolean; provenance?: { model: string; adjudicated_at: string; evidence_hash: string }; onClauseClick?: (ref: string) => void }) {
   const meta = DECISION_META[assessment.decision];
+  const renderClause = (ref: string) =>
+    onClauseClick ? (
+      <button onClick={() => onClauseClick(ref)} title="Show this clause in the contract" className="cursor-pointer" style={{ background: "none", border: 0, padding: 0 }}>
+        <ClauseChip>{ref}</ClauseChip>
+      </button>
+    ) : (
+      <ClauseChip>{ref}</ClauseChip>
+    );
   return (
     <article className="rounded-[5px] overflow-hidden anim-reveal" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2), 0 10px 30px rgba(22,22,26,0.05)" }}>
       <div className="px-5 md:px-6 py-3 flex items-center justify-between hairline-b" style={{ background: "linear-gradient(180deg, var(--paper-2), var(--paper))" }}>
@@ -275,7 +283,7 @@ export function VerdictCard({ assessment, scenario, revised = false }: { assessm
           </div>
           {assessment.criteria.map((cr, i) => (
             <div key={i} className="grid gap-x-4 px-2 py-3 text-[12.5px] leading-snug" style={{ gridTemplateColumns: "56px minmax(180px, 1.4fr) 110px 1.6fr 1.2fr", boxShadow: i === assessment.criteria.length - 1 ? "none" : "inset 0 -1px 0 var(--keyline-soft)" }}>
-              <div><ClauseChip>{cr.clause_ref}</ClauseChip></div>
+              <div>{renderClause(cr.clause_ref)}</div>
               <div style={{ color: "var(--ink)" }}>{cr.requirement}</div>
               <div><StatusChip status={cr.status} /></div>
               <div style={{ color: "var(--ink-2)" }}>{cr.observed_in_photo}</div>
@@ -287,7 +295,7 @@ export function VerdictCard({ assessment, scenario, revised = false }: { assessm
         <div className="crit-cards flex-col gap-2" style={{ display: "none" }}>
           {assessment.criteria.map((cr, i) => (
             <div key={i} className="rounded-[3px] p-3" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-              <div className="flex items-center justify-between mb-1.5"><ClauseChip>{cr.clause_ref}</ClauseChip><StatusChip status={cr.status} /></div>
+              <div className="flex items-center justify-between mb-1.5">{renderClause(cr.clause_ref)}<StatusChip status={cr.status} /></div>
               <div className="text-[13px] font-medium mb-2">{cr.requirement}</div>
               <div className="text-[11px] uppercase tracking-[0.14em] mono mb-0.5" style={{ color: "var(--ink-faint)" }}>Observed</div>
               <div className="text-[12.5px] mb-2" style={{ color: "var(--ink-2)" }}>{cr.observed_in_photo}</div>
@@ -307,9 +315,15 @@ export function VerdictCard({ assessment, scenario, revised = false }: { assessm
         <p className="serif italic text-[14px] leading-[1.55]" style={{ color: "var(--ink)" }}>“{assessment.reasoning_summary}”</p>
       </div>
 
-      <div className="px-5 md:px-6 py-2.5 flex items-center justify-between hairline-t" style={{ background: "var(--paper-2)" }}>
-        <span className="mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Issued by PromoProof · model adjudicator</span>
-        <span className="mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Pending operator approval</span>
+      <div className="px-5 md:px-6 py-2.5 flex items-center justify-between gap-3 flex-wrap hairline-t" style={{ background: "var(--paper-2)" }}>
+        <span className="mono text-[10px] tracking-[0.04em]" style={{ color: "var(--ink-faint)" }}>
+          {provenance ? (
+            <>model <span style={{ color: "var(--ink-mute)" }}>{provenance.model}</span> · evidence <span title={provenance.evidence_hash} style={{ color: "var(--ink-mute)" }}>{truncMid(provenance.evidence_hash, 10, 6)}</span></>
+          ) : (
+            "Issued by PromoProof · model adjudicator"
+          )}
+        </span>
+        <span className="mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Recorded on-chain · pending approval</span>
       </div>
     </article>
   );

@@ -9,20 +9,20 @@ const CATALOG = [
     id: "01",
     file: "01-oreo-endcap-q2.txt",
     retailer: "Walmart #2643",
-    promo: "Q2 OREO End-Cap",
+    promo: "Q2 OREO Floor Display",
     imageRef: "oreo.jpg",
     narrative:
-      "End-cap installed at the head of the cookie aisle for all of May. Four OREO facings with the branded OREO header card, fully stocked. Photo attached.",
+      "Freestanding OREO display tower installed beside the dairy case for all of May, with the branded OREO header card and well over four facings across the unit, fully stocked. Photo attached.",
     expect: "clean approve",
   },
   {
     id: "02",
     file: "02-cadbury-easter-display.txt",
-    retailer: "Target",
+    retailer: "Woolworths",
     promo: "Cadbury Easter Display",
     imageRef: "Cadbury-Woolworths-Easter-POS-Unit_1.jpg",
     narrative:
-      "Freestanding Cadbury Creme Egg display placed at the front entrance with Easter-themed Cadbury signage and six facings. Photo attached.",
+      "Freestanding Cadbury Easter display unit set up in a main grocery actionway, with Easter-themed Cadbury signage and a prominent presentation of the Cadbury Easter egg range. Photo attached.",
     expect: "borderline → asks for date proof",
   },
   {

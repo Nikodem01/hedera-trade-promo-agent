@@ -56,6 +56,27 @@ export const ComplianceAssessment = z.object({
 });
 export type ComplianceAssessmentType = z.infer<typeof ComplianceAssessment>;
 
+/**
+ * Deterministic provenance, computed in code (never by the model) and attached to
+ * every adjudication. `evidence_hash` binds the decision to the exact inputs the
+ * model judged — contract, narrative, any follow-up evidence, the proof image
+ * bytes, and the model id — so the on-chain record is tamper-evident without
+ * publishing the confidential terms themselves.
+ */
+export type AdjudicationProvenance = {
+  model: string;
+  adjudicated_at: string;
+  evidence_hash: string;
+};
+
+/** The full result returned by `adjudicate_claim`: the model's typed assessment,
+ * the code-computed provenance, and `audit_record` — the canonical, compact JSON
+ * string written verbatim to the HCS audit topic as the immutable decision record. */
+export type AdjudicationResult = ComplianceAssessmentType & {
+  provenance: AdjudicationProvenance;
+  audit_record: string;
+};
+
 export const SettlementProposal = z.object({
   amount_hbar: z.number().describe("The HBAR amount to settle, after caps."),
   partial_credit_pct: z.number().describe("The credit percentage applied."),

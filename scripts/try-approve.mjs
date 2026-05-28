@@ -5,8 +5,8 @@
 import { readFile } from "node:fs/promises";
 
 const SCENARIOS = {
-  oreo: { file: "01-oreo-endcap-q2.txt", retailer: "Walmart #2643", promo: "Q2 OREO End-Cap", imageRef: "oreo.jpg", narrative: "End-cap installed at the head of the cookie aisle for all of May. Four OREO facings with the branded OREO header card, fully stocked. Photo attached." },
-  cadbury: { file: "02-cadbury-easter-display.txt", retailer: "Target", promo: "Cadbury Easter Display", imageRef: "Cadbury-Woolworths-Easter-POS-Unit_1.jpg", narrative: "Freestanding Cadbury Creme Egg display placed at the front entrance with Easter-themed Cadbury signage and six facings. Photo attached." },
+  oreo: { file: "01-oreo-endcap-q2.txt", retailer: "Walmart #2643", promo: "Q2 OREO Floor Display", imageRef: "oreo.jpg", narrative: "Freestanding OREO display tower installed beside the dairy case for all of May, with the branded OREO header card and well over four facings across the unit, fully stocked. Photo attached." },
+  cadbury: { file: "02-cadbury-easter-display.txt", retailer: "Woolworths", promo: "Cadbury Easter Display", imageRef: "Cadbury-Woolworths-Easter-POS-Unit_1.jpg", narrative: "Freestanding Cadbury Easter display unit set up in a main grocery actionway, with Easter-themed Cadbury signage and a prominent presentation of the Cadbury Easter egg range. Photo attached." },
   ritz: { file: "03-ritz-checkout-shelf.txt", retailer: "7-Eleven TX-1188", promo: "RITZ Checkout Feature", imageRef: "licensed-image-ritz.jpg", narrative: "RITZ crackers merchandised with three facings and a branded shelf strip. Photo attached." },
 };
 
@@ -111,11 +111,12 @@ const events1 = await post([userClaim]);
 summarize("Turn 1", events1);
 
 const assistant1 = assistantFromEvents(events1);
+const followUp = process.argv[3] || "Approved. Please settle on-chain now.";
 const userApprove = {
   id: "u2",
   role: "user",
-  parts: [{ type: "text", text: "Approved. Please settle on-chain now." }],
+  parts: [{ type: "text", text: followUp }],
 };
-console.log(`\n>>> Turn 2: approving & settling…`);
+console.log(`\n>>> Turn 2: ${followUp}`);
 const events2 = await post([userClaim, assistant1, userApprove]);
 summarize("Turn 2", events2);

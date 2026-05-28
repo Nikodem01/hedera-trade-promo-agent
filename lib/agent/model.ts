@@ -20,7 +20,16 @@ export function orchestratorModel() {
 /** Vision/judgement — the multimodal adjudication core. */
 export function visionModel() {
   if (PROVIDER === "google") {
-    return google(process.env.VISION_MODEL ?? "gemini-3.1-flash-lite-preview");
+    return google(visionModelId());
   }
-  return anthropic(process.env.VISION_MODEL ?? "claude-opus-4-7");
+  return anthropic(visionModelId());
+}
+
+/** The active vision model id, recorded into the on-chain audit provenance so
+ * every decision carries the exact model that produced it. */
+export function visionModelId(): string {
+  if (PROVIDER === "google") {
+    return process.env.VISION_MODEL ?? "gemini-3.1-flash-lite-preview";
+  }
+  return process.env.VISION_MODEL ?? "claude-opus-4-7";
 }
