@@ -1,60 +1,79 @@
-# Architecture
+# Architecture (v2 — confidential, verifiable, mutually settled)
 
-## Layers
+## Principle: commitments on-chain, business data off-chain
+
+PromoProof follows the **Baseline pattern** (public chain as a neutral frame of reference; proofs
+on-chain, data off-chain) and EDPB blockchain guidance (salted commitments, never business/personal
+data on an immutable ledger). The public ledger holds only a salted Merkle root + a keyed image
+fingerprint per decision. Everything confidential lives in a server-side dossier store.
 
 ```
-┌─ UI (app/) ───────────────────────────────────────────────────────────┐
-│  page.tsx (server) reads contract fixtures → Console.tsx (client, useChat)│
-└───────────────┬───────────────────────────────────────────────────────┘
-                │  POST /api/agent  (UIMessage[] → toUIMessageStreamResponse)
-┌───────────────▼─── Orchestrator (lib/agent) ──────────────────────────┐
-│  claude-sonnet-4-6 via HederaAIToolkit + streamText, AUTONOMOUS mode    │
-│  system prompt drives: adjudicate → explain → (negotiate) → settle      │
-└───────┬───────────────────────────────────────────────┬───────────────┘
-        │ tpp-evaluator plugin (custom)                  │ kit built-in tools
-        ▼                                                ▼
-  adjudicate_claim   compute_settlement          submit_topic_message (HCS)
-  (Opus 4.7,         (deterministic, capped)     mint_fungible_token  (HTS)
-   multimodal)                                    transfer_hbar        (HBAR)
-        │                                                │
-        └──── ComplianceAssessment / SettlementProposal  └─ HashScan links
-                                                          + HcsAuditTrailHook
-                                                            (enforced audit)
+┌─ UI (app/) ───────────────────────────────────────────────────────────────────────┐
+│  page.tsx (server) reads contract fixtures → Console.tsx (client, useChat)          │
+│  PRIVATE operator view: verdict cards, dossier, /api/portfolio (off-chain stats)    │
+│  PUBLIC view: AuditLedger ← /api/audit ← Mirror Node  (commitments only)            │
+└───────────────┬─────────────────────────────────────────────────────────────────────┘
+                │  POST /api/agent
+┌───────────────▼─── Orchestrator (lib/agent) ──────────────────────────────────────┐
+│  LLM via HederaAIToolkit + streamText. Has NO fund-moving tool.                     │
+└───────┬───────────────────────────────────────────────────────────────────────────┘
+        │ tpp-evaluator plugin (custom)
+        ▼
+  adjudicate_claim ──▶ ComplianceAssessment
+        │  builds OFF-CHAIN dossier (lib/dossier.ts) → salted Merkle commitment
+        │  stores it (lib/dossier-store.ts) ; anchors PROOF-ONLY record to HCS in code
+        ▼
+  compute_settlement (deterministic, capped)
+        ▼
+  propose_settlement ──▶ ScheduleCreate(pUSDC transfer brand→retailer)  [raw @hiero-ledger/sdk]
+                          executes only on brand-approver + retailer ScheduleSign
+                          (/api/settlement/sign) → attestation NFT minted on execution
 ```
 
-## Tool sequence (per claim)
+## Tool / data flow (per claim)
 
-1. `adjudicate_claim(contract_text, image_ref, narrative, prior_evidence?)` → `ComplianceAssessment`
-   — Opus 4.7 reads the contract, sees the photo, returns a 5-way decision with per-criterion,
-   clause-cited findings, a recommended credit %, and the contract's max settlement.
-2. Orchestrator explains the assessment and acts on the decision:
-   - `request_more_evidence` → asks for specific proof, stops; on the retailer's reply, re-runs
-     step 1 with `prior_evidence` and revises.
-   - `escalate_human` / `reject` → no settlement (reject still gets an HCS record).
-   - `approve` / `partial_credit` → step 3 after explicit human approval.
-3. `compute_settlement(decision, recommended_credit_pct, max_settlement_hbar)` → `SettlementProposal`
-   — deterministic; caps at the contract max and a global ceiling.
-4. Settle on-chain: `submit_topic_message` (HCS decision record) → `mint_fungible_token` (HTS
-   receipt) → `transfer_hbar` (retailer wallet). `HcsAuditTrailHook` also auto-logs the
-   fund-moving/minting calls to HCS independently of the prompt.
+1. `adjudicate_claim(contract_text, image_ref, narrative, prior_evidence?, retailer?, promotion?)`
+   - multimodal judgement → `ComplianceAssessment` (5-way decision, per-criterion clause-cited
+     findings, confidence, recommended %, contract max).
+   - **in code**: `buildDossier` captures every field as a per-leaf-salted Merkle leaf
+     (`lib/merkle.ts`), computes `commitment` (root) + `image_fp` (HMAC of photo bytes); `putDossier`
+     stores it; `anchorCommitment` submits the proof-only `{schema, commitment, image_fp, ts}` to HCS.
+   - returns assessment + `provenance {commitment, image_fp, model, adjudicated_at}` + `anchor {seq…}`.
+2. Negotiation: `request_more_evidence` → ask, stop; on reply re-adjudicate (handles `NEW_IMAGE_REF`).
+3. `compute_settlement(decision, recommended_credit_pct, max_settlement_hbar)` → capped amount.
+4. `propose_settlement(amount, commitment)` → `ScheduleCreate` a pUSDC transfer brand→retailer; returns
+   `scheduleId`. Cannot execute alone.
+5. Consent gate (`/api/settlement/sign`): brand approver signs, retailer signs → Hedera executes →
+   attestation NFT (metadata = commitment) minted.
+
+## Verify / disclose (the dispute artifact)
+
+- `/api/disclose` (operator): given a commitment + optional `labels`, returns a disclosure package
+  (chosen leaves + per-leaf salts + Merkle proofs).
+- `/api/verify` (anyone): re-derives each leaf, checks its Merkle proof against the commitment,
+  confirms the commitment is on the Mirror Node (seq + consensus time), and flags `image_fp` reuse
+  under a different commitment. Tampering any revealed value fails its proof.
 
 ## Data shapes
 
 - `ComplianceAssessment`: `{ decision, confidence, recommended_credit_pct, max_settlement_hbar,
-  criteria[{ requirement, clause_ref, status, observed_in_photo, concern }], reasoning_summary,
+  criteria[{requirement, clause_ref, status, observed_in_photo, concern}], reasoning_summary,
   evidence_requested? }`
-- `SettlementProposal`: `{ amount_hbar, partial_credit_pct, max_settlement_hbar, justification }`
-
-## Why Hedera
-
-- **HCS** — a neutral, immutable ledger of every claim and decision; neither brand nor retailer can
-  edit it. SOX-clean audit by construction.
-- **HTS** — a "PromoProof Receipt" token minted per settlement as a portable attestation artifact.
-- **HBAR** — the actual money movement, settled in seconds with low, predictable fees.
+- `Dossier` (off-chain): `{ commitment, image_fp, fields[{label, value, salt}], created_at }`
+- On-chain record: `{ schema:"PromoProof/v2", kind:"adjudication-commitment", commitment, image_fp, ts }`
+- `Disclosure`: `{ commitment, revealed[{label, value, salt, proof}] }`
 
 ## Security / no-drain
 
-The LLM never moves money or picks a recipient. `compute_settlement` is deterministic and hard-caps
-the payout at the contract max **and** `SETTLEMENT_HARD_CAP_HBAR`; the recipient is a fixed
-registered wallet; settlement requires an explicit human approval turn. See
-[`tests/injection.test.ts`](../tests/injection.test.ts). Operator/API keys are server-only.
+The LLM never moves money and has no tool that can. `compute_settlement` and `propose_settlement` both
+cap the amount; the recipient is a fixed env account; settlement executes only on the brand approver's
+**and** the retailer's on-chain signatures (Scheduled Transactions + receiver-signature-required).
+Operator and party keys are server-only. See `tests/injection.test.ts`, `tests/dossier.test.ts`.
+
+## Why Hedera
+
+- **HCS** = a decentralized notary: ordered, timestamped, immutable commitments any party verifies
+  independently — non-repudiation a single-owner DB structurally can't provide.
+- **HTS** = a USD-pegged settlement unit (`pUSDC`) + a unique attestation NFT per settlement.
+- **Scheduled Transactions + receiver-signature-required** = mutual consent enforced by consensus.
+- Sub-cent, fixed fees; fast finality; Council governance — fit for enterprise volume.
