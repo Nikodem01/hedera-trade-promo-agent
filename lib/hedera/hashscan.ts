@@ -13,3 +13,7 @@ export const txUrl = (transactionId: string) =>
 export const topicUrl = (topicId: string) => `${BASE}/topic/${topicId}`;
 
 export const tokenUrl = (tokenId: string) => `${BASE}/token/${tokenId}`;
+
+export const scheduleUrl = (scheduleId: string) => `${BASE}/schedule/${scheduleId}`;
+
+export const accountUrl = (accountId: string) => `${BASE}/account/${accountId}`;

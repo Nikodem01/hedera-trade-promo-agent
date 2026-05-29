@@ -9,22 +9,21 @@ import {
   isToolOrDynamicToolUIPart,
   type UIMessage,
 } from "ai";
-import type {
-  ComplianceAssessmentType,
-  SettlementProposalType,
-} from "@/lib/plugins/tpp-evaluator/schemas";
-import { txUrl } from "@/lib/hedera/hashscan";
+import type { ComplianceAssessmentType } from "@/lib/plugins/tpp-evaluator/schemas";
 import {
   Header,
   TimelineRow,
   ToolChip,
   VerdictCard,
-  SettlementReceipt,
-  PreSettlement,
+  RevisionDiff,
+  MutualSettlement,
+  Dossier,
   type CardScenario,
-  type HashScanLinks,
 } from "@/app/console/components";
 import { AuditLedger } from "@/app/console/AuditLedger";
+import { PortfolioPrivate } from "@/app/console/PortfolioPrivate";
+import { AccrualFund } from "@/app/console/AccrualFund";
+import { AskPanel } from "@/app/console/AskPanel";
 import { EvidencePanel, EvidenceRequestPanel } from "@/app/console/Evidence";
 import { ProseMarkdown } from "@/app/console/Markdown";
 
@@ -47,11 +46,6 @@ function parseJSON(v: unknown): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function txOf(out: Record<string, unknown> | null): string | undefined {
-  const raw = out?.raw as Record<string, unknown> | undefined;
-  return typeof raw?.transactionId === "string" ? raw.transactionId : undefined;
 }
 
 type ToolPart = {
@@ -94,56 +88,28 @@ function LiveToolChip({ name, part }: { name: string; part: ToolPart }) {
   );
 }
 
-/** Aggregate the on-chain settlement across the whole conversation for the receipt. */
-function deriveSettlement(messages: UIMessage[]): { proposal: SettlementProposalType; links: HashScanLinks; partial: boolean } | null {
-  let proposal: SettlementProposalType | null = null;
-  let topicTx: string | undefined;
-  let mintTx: string | undefined;
-  let transferTx: string | undefined;
+/** The proposed settlement (from propose_settlement) — a scheduled pUSDC transfer
+ * awaiting the brand approver's and the retailer's on-chain signatures. */
+function deriveProposed(messages: UIMessage[]): { scheduleId: string; amount: number; commitment: string; brandTreasury?: string; retailerAccount?: string } | null {
+  let res: { scheduleId: string; amount: number; commitment: string; brandTreasury?: string; retailerAccount?: string } | null = null;
   for (const m of messages) {
     if (m.role !== "assistant") continue;
     for (const p of m.parts) {
       if (!isToolOrDynamicToolUIPart(p)) continue;
-      const name = getToolOrDynamicToolName(p);
+      if (getToolOrDynamicToolName(p) !== "propose_settlement") continue;
       const out = parseJSON((p as ToolPart).output);
-      if (!out) continue;
-      if (name === "compute_settlement") proposal = out as unknown as SettlementProposalType;
-      else if (name.startsWith("submit_topic_message")) topicTx = txOf(out) ?? topicTx;
-      else if (name.startsWith("mint_fungible_token")) mintTx = txOf(out) ?? mintTx;
-      else if (name.startsWith("transfer_hbar")) transferTx = txOf(out) ?? transferTx;
+      if (out && typeof out.scheduleId === "string") {
+        res = {
+          scheduleId: out.scheduleId,
+          amount: Number(out.amount) || 0,
+          commitment: typeof out.commitment === "string" ? out.commitment : "",
+          brandTreasury: typeof out.brand_treasury === "string" ? out.brand_treasury : undefined,
+          retailerAccount: typeof out.retailer_account === "string" ? out.retailer_account : undefined,
+        };
+      }
     }
   }
-  if (!proposal || !transferTx) return null;
-  const links: HashScanLinks = {
-    hcsAudit: topicTx ? txUrl(topicTx) : "#",
-    htsReceipt: mintTx ? txUrl(mintTx) : "#",
-    hbarXfer: txUrl(transferTx),
-    hcsAuditId: topicTx ?? "—",
-    htsReceiptId: mintTx ?? "—",
-    hbarXferId: transferTx,
-    operatorId: "",
-  };
-  return { proposal, links, partial: proposal.partial_credit_pct < 100 };
-}
-
-/** A computed settlement awaiting the human consent gate: compute_settlement has
- * run with a payable amount, but no transfer_hbar has happened yet. */
-function derivePendingSettlement(messages: UIMessage[]): SettlementProposalType | null {
-  let proposal: SettlementProposalType | null = null;
-  let settled = false;
-  for (const m of messages) {
-    if (m.role !== "assistant") continue;
-    for (const p of m.parts) {
-      if (!isToolOrDynamicToolUIPart(p)) continue;
-      const name = getToolOrDynamicToolName(p);
-      const out = parseJSON((p as ToolPart).output);
-      if (!out) continue;
-      if (name === "compute_settlement") proposal = out as unknown as SettlementProposalType;
-      else if (name.startsWith("transfer_hbar")) settled = true;
-    }
-  }
-  if (!proposal || settled || proposal.amount_hbar <= 0) return null;
-  return proposal;
+  return res;
 }
 
 /** The most recent adjudication's decision + evidence ask — drives the live
@@ -164,15 +130,72 @@ function lastAdjudication(messages: UIMessage[]): { decision: string; evidence_r
   return result;
 }
 
+type Provenance = { model: string; adjudicated_at: string; commitment: string; image_fp?: string };
+type Anchor = { topicId: string; sequenceNumber: number };
+
+/** The full final adjudication (assessment + provenance + HCS anchor + exact inputs)
+ * — feeds the printable settlement dossier. */
+function lastAdjudicationFull(messages: UIMessage[]): {
+  assessment: ComplianceAssessmentType;
+  provenance?: Provenance;
+  anchor?: Anchor | null;
+  input: Record<string, unknown> | null;
+} | null {
+  let result: { assessment: ComplianceAssessmentType; provenance?: Provenance; anchor?: Anchor | null; input: Record<string, unknown> | null } | null = null;
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    for (const p of m.parts) {
+      if (!isToolOrDynamicToolUIPart(p)) continue;
+      if (getToolOrDynamicToolName(p) !== "adjudicate_claim") continue;
+      const out = parseJSON((p as ToolPart).output);
+      if (out && typeof out.decision === "string") {
+        result = {
+          assessment: out as unknown as ComplianceAssessmentType,
+          provenance: (out as { provenance?: Provenance }).provenance,
+          anchor: (out as { anchor?: Anchor | null }).anchor ?? null,
+          input: parseJSON((p as ToolPart).input),
+        };
+      }
+    }
+  }
+  return result;
+}
+
 const UPLOAD_REF_RE = /NEW_IMAGE_REF:\s*upload:([\w.-]+)/;
 
-function ClaimPickerLive({ scenarios, active, busy, onSelect }: { scenarios: Scenario[]; active: string | null; busy: boolean; onSelect: (s: Scenario) => void }) {
+function ClaimPickerLive({ scenarios, active, busy, onSelect, onImport }: { scenarios: Scenario[]; active: string | null; busy: boolean; onSelect: (s: Scenario) => void; onImport: (s: Scenario) => void }) {
+  const [importing, setImporting] = useState(false);
+  const [raw, setRaw] = useState("");
+  const [impErr, setImpErr] = useState<string | null>(null);
+  function doImport() {
+    try {
+      const p = JSON.parse(raw) as Partial<Scenario>;
+      if (!p.retailer || !p.promo || !p.contractText || !p.imageRef) throw new Error("need retailer, promo, contractText, imageRef");
+      onImport({ id: `imp-${Date.now()}`, file: "", retailer: p.retailer, promo: p.promo, imageRef: p.imageRef, narrative: p.narrative ?? "", expect: "imported", contractText: p.contractText });
+      setRaw(""); setImporting(false); setImpErr(null);
+    } catch (e) {
+      setImpErr(e instanceof Error ? e.message : "invalid JSON");
+    }
+  }
   return (
     <section className="max-w-[1100px] mx-auto px-6 md:px-8 pt-6 pb-4 w-full">
       <div className="flex items-baseline justify-between mb-3">
         <h2 className="mono text-[10.5px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--ink-faint)" }}>Active claims · awaiting adjudication</h2>
-        <span className="mono text-[10.5px] uppercase tracking-[0.16em]" style={{ color: "var(--ink-faint)" }}>{scenarios.length} pending</span>
+        <span className="flex items-center gap-3">
+          <button onClick={() => setImporting((v) => !v)} className="mono text-[10px] uppercase tracking-[0.14em] px-2 py-0.5 rounded-sm" style={{ color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: "pointer" }}>+ import claim</button>
+          <span className="mono text-[10.5px] uppercase tracking-[0.16em]" style={{ color: "var(--ink-faint)" }}>{scenarios.length} pending</span>
+        </span>
       </div>
+      {importing && (
+        <div className="mb-3 rounded-[4px] p-3" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={4} placeholder={'{"retailer":"Kroger #55","promo":"Q3 endcap","imageRef":"oreo.jpg","narrative":"...","contractText":"§1.1 ..."}'} className="field-bare w-full text-[12px] mono p-2 rounded-[3px]" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }} />
+          <div className="flex items-center gap-2 mt-2">
+            <button onClick={doImport} className="mono text-[10.5px] uppercase tracking-[0.14em] px-3 py-1.5 rounded-[3px]" style={{ background: "var(--ink)", color: "white", cursor: "pointer" }}>Add to queue</button>
+            <span className="mono text-[10px]" style={{ color: "var(--ink-faint)" }}>paste a promotion JSON (imageRef = a built-in proof filename or https URL)</span>
+            {impErr && <span className="text-[11px]" style={{ color: "var(--red)" }}>{impErr}</span>}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {scenarios.map((s) => {
           const isActive = active === s.id;
@@ -196,6 +219,7 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
   });
   const [input, setInput] = useState("");
   const [active, setActive] = useState<Scenario | null>(null);
+  const [imported, setImported] = useState<Scenario[]>([]);
   const [highlightedClause, setHighlightedClause] = useState<string | null>(null);
   const busy = status === "submitted" || status === "streaming";
 
@@ -222,9 +246,9 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
     setInput("");
   }
 
-  const settlement = useMemo(() => deriveSettlement(messages), [messages]);
-  const pending = useMemo(() => derivePendingSettlement(messages), [messages]);
+  const proposed = useMemo(() => deriveProposed(messages), [messages]);
   const lastAdj = useMemo(() => lastAdjudication(messages), [messages]);
+  const finalAdj = useMemo(() => lastAdjudicationFull(messages), [messages]);
   const awaitingEvidence =
     lastAdj?.decision === "request_more_evidence" &&
     messages[messages.length - 1]?.role === "assistant" &&
@@ -234,11 +258,12 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
     : null;
 
   let adjudicationsSeen = 0;
+  let prevAssessment: ComplianceAssessmentType | null = null;
 
   return (
     <>
       <Header />
-      <ClaimPickerLive scenarios={scenarios} active={active?.id ?? null} busy={busy} onSelect={submitClaim} />
+      <ClaimPickerLive scenarios={[...scenarios, ...imported]} active={active?.id ?? null} busy={busy} onSelect={submitClaim} onImport={(s) => setImported((p) => [...p, s])} />
 
       <main className="flex-1 max-w-[1100px] w-full mx-auto px-6 md:px-8 pt-2 pb-10">
         {messages.length === 0 ? (
@@ -294,15 +319,31 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
                       const tp = part as ToolPart;
                       const out = parseJSON(tp.output);
                       if (name === "adjudicate_claim" && tp.state === "output-available" && out && header) {
+                        const current = out as unknown as ComplianceAssessmentType;
                         const revised = adjudicationsSeen++ > 0;
+                        const prior = revised ? prevAssessment : null;
+                        prevAssessment = current;
+                        const provenance = (out as { provenance?: Provenance }).provenance;
+                        // The verify panel proves the off-chain dossier against the on-chain commitment.
+                        const verify = provenance?.commitment ? { commitment: provenance.commitment } : undefined;
+                        // The exact image the model judged (and boxed) — for the visual-findings overlay.
+                        const inp = parseJSON(tp.input);
+                        const ref = typeof inp?.image_ref === "string" ? inp.image_ref : active?.imageRef;
+                        const imageSrc = ref ? (ref.startsWith("upload:") ? `/api/uploads/${ref.slice("upload:".length)}` : `/proofs/${ref}`) : undefined;
                         return (
                           <TimelineRow key={i} kind="verdict" time="finding">
+                            {prior && <RevisionDiff prior={prior} current={current} />}
                             <VerdictCard
-                              assessment={out as unknown as ComplianceAssessmentType}
+                              assessment={current}
                               scenario={header}
                               revised={revised}
-                              provenance={(out as { provenance?: { model: string; adjudicated_at: string; evidence_hash: string } }).provenance}
+                              provenance={provenance}
                               onClauseClick={setHighlightedClause}
+                              verify={verify}
+                              imageSrc={imageSrc}
+                              authenticity={(out as { authenticity?: { has_capture_metadata: boolean; capture_time?: string; gps?: string; camera?: string; manipulation_likelihood?: number; manipulation_note?: string } }).authenticity}
+                              citations={(out as { citations?: { ref: string; verified: boolean }[] }).citations}
+                              review={(out as { review?: { agrees: boolean; concern: string; recommended_action: "accept" | "escalate" } }).review}
                             />
                           </TimelineRow>
                         );
@@ -325,21 +366,34 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
               </TimelineRow>
             )}
 
-            {pending && !settlement && header && !busy && (
-              <TimelineRow kind="settle" time="awaiting approval">
-                <PreSettlement
-                  amount={pending.amount_hbar}
-                  scenario={{ ...header, maxHbar: pending.max_settlement_hbar, contractId: header.claimId }}
-                  onApprove={() => sendMessage({ text: "Approved. Settle on-chain now — mint the receipt and transfer the HBAR." })}
+            {proposed && header && (
+              <TimelineRow kind="settle" time="mutual consent" last>
+                <MutualSettlement
+                  scheduleId={proposed.scheduleId}
+                  amount={proposed.amount}
+                  commitment={proposed.commitment}
+                  brandTreasury={proposed.brandTreasury}
+                  retailerAccount={proposed.retailerAccount}
                 />
               </TimelineRow>
             )}
 
-            {settlement && header && (
-              <TimelineRow kind="settle" time="settled" last>
-                <SettlementReceipt proposal={settlement.proposal} scenario={header} partial={settlement.partial} links={settlement.links} />
-              </TimelineRow>
-            )}
+            {proposed && header && finalAdj && active && (() => {
+              const ref = typeof finalAdj.input?.image_ref === "string" ? finalAdj.input.image_ref : active.imageRef;
+              const imageSrc = ref.startsWith("upload:") ? `/api/uploads/${ref.slice("upload:".length)}` : `/proofs/${ref}`;
+              return (
+                <Dossier
+                  scenario={header}
+                  assessment={finalAdj.assessment}
+                  settlement={{ amount: proposed.amount, scheduleId: proposed.scheduleId, token: "pUSDC" }}
+                  anchor={finalAdj.anchor}
+                  provenance={finalAdj.provenance}
+                  narrative={active.narrative}
+                  contractText={active.contractText}
+                  imageSrc={imageSrc}
+                />
+              );
+            })()}
 
             {busy && (
               <div className="flex items-center gap-2 mono text-[10.5px] uppercase tracking-[0.14em] pl-10 pb-4" style={{ color: "var(--emerald)" }}>
@@ -351,6 +405,9 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
         )}
       </main>
 
+      <AccrualFund refreshKey={auditTick} />
+      <PortfolioPrivate refreshKey={auditTick} />
+      <AskPanel />
       <AuditLedger refreshKey={auditTick} />
 
       <div className="hairline-t" style={{ background: "var(--paper-2)" }}>

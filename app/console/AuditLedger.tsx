@@ -1,22 +1,17 @@
 "use client";
-// Reads the immutable decision ledger back from Hedera's Mirror Node (via
-// /api/audit) and renders it — closing the "verifiable" loop. These records are
-// fetched from the chain, independent of the agent run that wrote them.
+// The PUBLIC commitment ledger: reads the audit topic back from Hedera's Mirror
+// Node (via /api/audit). It shows ONLY the proof-only commitments anchored on-chain
+// — no outcomes, amounts, parties, or reasoning. The confidential dossier lives
+// off-chain; the operator's private console renders the business detail.
 import { useCallback, useEffect, useState } from "react";
-import type { ComplianceAssessmentType } from "@/lib/plugins/tpp-evaluator/schemas";
 import { topicUrl } from "@/lib/hedera/hashscan";
-import { DecisionBadge, ExternalIcon, truncMid } from "./primitives";
-
-type Decision = ComplianceAssessmentType["decision"];
+import { ExternalIcon, truncMid } from "./primitives";
 
 type AuditEntry = {
   sequenceNumber: number;
   consensusTimestamp: string;
   record: Record<string, unknown> | string;
 };
-
-const DECISIONS = ["approve", "partial_credit", "reject", "request_more_evidence", "escalate_human"];
-const isDecision = (v: unknown): v is Decision => typeof v === "string" && DECISIONS.includes(v);
 
 /** "1779995141.226867720" (consensus seconds.nanos) → readable UTC. */
 function fmtConsensus(ts: string): string {
@@ -35,11 +30,54 @@ function parseHookRecord(text: string): { tool: string; status: string } | null 
   return { tool: tool.replace(/_tool$/, ""), status };
 }
 
+function Metric({ label, value, caption }: { label: string; value: string; caption?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="mono text-[9.5px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>{label}</span>
+      <span className="text-[20px] font-semibold tabular-nums leading-none" style={{ color: "var(--ink)" }}>{value}</span>
+      {caption && <span className="mono text-[9.5px]" style={{ color: "var(--ink-faint)" }}>{caption}</span>}
+    </div>
+  );
+}
+
+/** Public-ledger stats. We only count the commitments anchored — outcomes, amounts,
+ * parties and reasoning are NEVER on-chain, so they're deliberately absent here. */
+function PortfolioStats({ entries }: { entries: AuditEntry[] }) {
+  const count = entries.filter(
+    (e) => typeof e.record === "object" && e.record !== null && "commitment" in (e.record as object),
+  ).length;
+  if (count === 0) return null;
+  return (
+    <div className="px-5 md:px-6 py-4 hairline-b flex flex-wrap items-end gap-x-9 gap-y-4" style={{ background: "var(--paper-2)" }}>
+      <Metric label="Decisions committed" value={String(count)} caption="proof-only anchors" />
+      <Metric label="Cycle time" value="seconds" caption="vs 60–120 days, by hand" />
+      <div className="max-w-[440px]">
+        <span className="mono text-[9.5px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Public ledger · zero business data</span>
+        <p className="text-[11.5px] leading-snug mt-1" style={{ color: "var(--ink-mute)" }}>
+          Outcomes, amounts, parties and reasoning never touch the chain — only salted commitments. Any field is revealed &amp; proven on demand.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function AuditLedger({ refreshKey }: { refreshKey?: number }) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [topicId, setTopicId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [sealing, setSealing] = useState(false);
+  const [sealed, setSealed] = useState<{ count: number; sequenceNumber?: number } | null>(null);
+
+  async function seal() {
+    setSealing(true);
+    try {
+      const r = await fetch("/api/batch/seal", { method: "POST" });
+      const j = await r.json();
+      if (r.ok) setSealed(j);
+    } catch { /* ignore */ }
+    setSealing(false);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +110,9 @@ export function AuditLedger({ refreshKey }: { refreshKey?: number }) {
             <span className="text-[13px] font-semibold">Immutable decision record · every verdict, recorded</span>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={seal} disabled={sealing} className="mono text-[10.5px] uppercase tracking-[0.14em] font-medium px-3 py-1.5 rounded-[3px]" title="Roll all commitments into one Merkle batch root and anchor a single HCS message (scale + privacy)" style={{ background: "transparent", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: sealing ? "wait" : "pointer" }}>
+              {sealing ? "sealing…" : sealed ? `✓ batch ${sealed.count}→1 (seq #${sealed.sequenceNumber ?? "—"})` : "seal batch"}
+            </button>
             <button onClick={load} disabled={loading} className="mono text-[10.5px] uppercase tracking-[0.14em] font-medium px-3 py-1.5 rounded-[3px]" style={{ background: "transparent", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: loading ? "wait" : "pointer" }}>
               {loading ? "reading…" : "refresh"}
             </button>
@@ -83,6 +124,8 @@ export function AuditLedger({ refreshKey }: { refreshKey?: number }) {
             )}
           </div>
         </div>
+
+        <PortfolioStats entries={entries} />
 
         {err && (
           <div className="px-5 md:px-6 py-3 text-[12px]" style={{ color: "var(--red)" }}>{err}</div>
@@ -97,11 +140,8 @@ export function AuditLedger({ refreshKey }: { refreshKey?: number }) {
             {entries.map((e) => {
               const r = e.record;
               const rec = typeof r === "object" && r !== null ? (r as Record<string, unknown>) : null;
-              const decision = rec && isDecision(rec.decision) ? rec.decision : null;
-              const retailer = (rec?.retailer as string) || null;
-              const promotion = (rec?.promotion as string) || (rec?.claim as string) || null;
-              const model = (rec?.model as string) || null;
-              const hash = (rec?.evidence_hash as string) || null;
+              const commitment = (rec?.commitment as string) || null;
+              const imageFp = (rec?.image_fp as string) || null;
               const hook = typeof r === "string" ? parseHookRecord(r) : null;
               return (
                 <div key={e.sequenceNumber} className="px-5 md:px-6 py-3 grid grid-cols-[auto_1fr_auto] gap-x-4 gap-y-1 items-center" style={{ boxShadow: "inset 0 -1px 0 var(--keyline-soft)" }}>
@@ -110,8 +150,8 @@ export function AuditLedger({ refreshKey }: { refreshKey?: number }) {
                   </span>
                   <div className="min-w-0">
                     <div className="text-[12.5px] font-medium truncate" style={{ color: "var(--ink)" }}>
-                      {decision ? (
-                        `${retailer ?? "Claim"}${promotion ? ` · ${promotion}` : ""}`
+                      {commitment ? (
+                        <span className="mono text-[12px]">◆ decision commitment</span>
                       ) : hook ? (
                         <span className="mono text-[12px]">⛓ {hook.tool}</span>
                       ) : (
@@ -120,16 +160,18 @@ export function AuditLedger({ refreshKey }: { refreshKey?: number }) {
                     </div>
                     <div className="mono text-[10px] tracking-[0.04em] mt-0.5 flex items-center gap-2 flex-wrap" style={{ color: "var(--ink-faint)" }}>
                       <span>{fmtConsensus(e.consensusTimestamp)}</span>
-                      {model && <span>· {model}</span>}
-                      {hash && <span title={hash}>· hash {truncMid(hash, 8, 6)}</span>}
+                      {commitment && <span title={commitment}>· commit {truncMid(commitment, 8, 6)}</span>}
+                      {imageFp && <span title={imageFp}>· img {truncMid(imageFp, 6, 4)}</span>}
                       {hook && <span>· enforced audit hook</span>}
                     </div>
                   </div>
                   <div className="justify-self-end">
-                    {decision ? (
-                      <DecisionBadge decision={decision} size="sm" />
+                    {commitment ? (
+                      <span className="mono text-[9.5px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-sm" style={{ color: "var(--emerald)", background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px rgba(11,93,59,0.18)" }}>
+                        committed
+                      </span>
                     ) : hook ? (
-                      <span className="mono text-[9.5px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-sm" style={{ color: "var(--emerald)", background: "var(--emerald-bg, rgba(11,93,59,0.08))", boxShadow: "inset 0 0 0 1px rgba(11,93,59,0.18)" }}>
+                      <span className="mono text-[9.5px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-sm" style={{ color: "var(--emerald)", background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px rgba(11,93,59,0.18)" }}>
                         {hook.status}
                       </span>
                     ) : (

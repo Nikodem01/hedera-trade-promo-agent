@@ -2,6 +2,7 @@ import { AgentMode } from "@hashgraph/hedera-agent-kit";
 import {
   allCorePlugins,
   MINT_FUNGIBLE_TOKEN_TOOL,
+  MINT_NON_FUNGIBLE_TOKEN_TOOL,
   TRANSFER_HBAR_TOOL,
 } from "@hashgraph/hedera-agent-kit/plugins";
 import { HcsAuditTrailHook } from "@hashgraph/hedera-agent-kit/hooks";
@@ -31,8 +32,11 @@ export function runAgent(messages: ModelMessage[]) {
   // so it only works on transactional tools (transfer/mint). It throws on
   // query-only tools like adjudicate_claim — we log those via an explicit
   // submit_topic_message call from the prompt instead. (Filed as Day-5 feedback.)
+  // Audit-log every fund-moving / minting call. Both the fungible and NFT mint
+  // tools are watched so the enforced audit trail holds whichever receipt is
+  // configured (NFT mint only fires when HTS_RECEIPT_NFT_TOKEN_ID is set).
   const hooks = topicId
-    ? [new HcsAuditTrailHook([TRANSFER_HBAR_TOOL, MINT_FUNGIBLE_TOKEN_TOOL], topicId)]
+    ? [new HcsAuditTrailHook([TRANSFER_HBAR_TOOL, MINT_FUNGIBLE_TOKEN_TOOL, MINT_NON_FUNGIBLE_TOKEN_TOOL], topicId)]
     : [];
 
   const toolkit = new HederaAIToolkit({

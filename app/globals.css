@@ -154,3 +154,22 @@ html, body {
 .btn-primary { transition: transform .12s ease, box-shadow .15s ease, background .15s ease; }
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(11,93,59,0.22); background: #0a523a; }
 .btn-primary:active { transform: translateY(0); }
+
+/* Audit dossier print view: hidden on screen, and the ONLY thing printed.
+   "Export dossier" calls window.print(); the browser's Save-as-PDF yields the
+   one-page filing an auditor keeps. */
+.print-dossier { display: none; }
+@media print {
+  body * { visibility: hidden; }
+  .print-dossier, .print-dossier * { visibility: visible; }
+  .print-dossier {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #fff;
+  }
+  .no-print { display: none !important; }
+  @page { margin: 14mm; }
+}
