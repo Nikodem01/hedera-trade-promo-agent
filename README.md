@@ -142,8 +142,27 @@ retailer's on-chain signatures. The recipient is a fixed registered account, nev
 [`tests/injection.test.ts`](tests/injection.test.ts) and [`tests/dossier.test.ts`](tests/dossier.test.ts).
 Operator/party keys are server-only.
 
+## Enterprise readiness
+
+PromoProof adjudicates payouts, so it is engineered to the diligence a CPG trade-finance buyer
+actually runs — model risk, data governance, and provable trust, not just a demo:
+
+- **Model risk ([docs/MODEL_RISK.md](docs/MODEL_RISK.md)).** An OCC-style posture: a dual-model
+  adjudicator + **independent reviewer**, a **deterministic safety gate** (low-confidence or
+  reviewer-flagged decisions auto-escalate to a human — withhold-only, never approve), a labeled
+  **validation harness** with an on-chain ground truth (`docs/validation/`), and a live **Model Risk &
+  Quality** panel (`/api/quality`: reviewer-concurrence, citation-integrity, safety-gate holds, model
+  lineage).
+- **Data governance ([docs/COMPLIANCE.md](docs/COMPLIANCE.md), [docs/SECURITY.md](docs/SECURITY.md)).**
+  Dossiers **encrypted at rest** (AES-256-GCM); a **provable, HCS-anchored access log** (a hosted DB
+  log is editable — this isn't); **crypto-shredding** deletion (EU AI Act / GDPR-aligned); the no-drain
+  invariant and threat model written down.
+- **Positioning ([docs/COMPETITIVE.md](docs/COMPETITIVE.md)).** Why a neutral consensus ledger beats a
+  database, and why the trust layer is the one column an incumbent deduction-management suite can't fill.
+
 ## Roadmap
 
 Batched (Merkle-rolled) commitments for scale + timing privacy; production stablecoin (Circle USDC /
-Stablecoin Studio) and anchor-only settlement for amount-confidentiality; encrypted persistent dossier
-store; ERP/TPM integration.
+Stablecoin Studio) and anchor-only settlement for amount-confidentiality; replicated/persistent dossier
+store (at-rest encryption is in place — see SECURITY.md); third-party attestations (SOC 2 / ISO 42001);
+ERP/TPM integration.

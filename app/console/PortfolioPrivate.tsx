@@ -11,7 +11,7 @@ type Decision = ComplianceAssessmentType["decision"];
 const MIX_ORDER = ["approve", "partial_credit", "reject", "request_more_evidence", "escalate_human"];
 
 export function PortfolioPrivate({ refreshKey }: { refreshKey?: number }) {
-  const [data, setData] = useState<{ count: number; mix: Record<string, number>; settledValue: number; recovered: number } | null>(null);
+  const [data, setData] = useState<{ count: number; mix: Record<string, number>; settledValue: number; recovered: number; flagged?: number; catchRate?: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -49,6 +49,13 @@ export function PortfolioPrivate({ refreshKey }: { refreshKey?: number }) {
             <span className="text-[20px] font-semibold tabular-nums leading-none" style={{ color: "var(--emerald)" }}>{(data.recovered ?? 0).toFixed(0)} <span className="text-[12px] font-medium" style={{ color: "var(--ink-mute)" }}>pUSDC</span></span>
             <span className="mono text-[9px]" style={{ color: "var(--ink-faint)" }}>vs paying every claim in full</span>
           </div>
+          {data.flagged != null && data.flagged > 0 && (
+            <div className="flex flex-col gap-0.5">
+              <span className="mono text-[9.5px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Deductions caught</span>
+              <span className="text-[20px] font-semibold tabular-nums leading-none">{data.flagged} <span className="text-[12px] font-medium" style={{ color: "var(--ink-mute)" }}>· {Math.round((data.catchRate ?? 0) * 100)}% of resolved</span></span>
+              <span className="mono text-[9px]" style={{ color: "var(--ink-faint)" }}>over-claims flagged before payout</span>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <span className="mono text-[9.5px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Decision mix</span>
             <div className="flex flex-wrap items-center gap-2.5">

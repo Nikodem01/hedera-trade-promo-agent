@@ -15,19 +15,30 @@ export async function GET() {
   const mix: Record<string, number> = {};
   let settledValue = 0;
   let recovered = 0; // $ withheld vs naively paying every resolved claim in full
-  for (const d of ds) {
-    const decision = field(d, "decision");
-    if (!decision) continue;
+  let flagged = 0; // claims where a deduction was caught (any amount withheld)
+  let resolved = 0; // claims with a final settlement outcome (approve/partial/reject)
+  // exclude access-log / override commitments — only real adjudications carry a decision
+  const adj = ds.filter((d) => field(d, "decision") && field(d, "model"));
+  for (const d of adj) {
+    const decision = field(d, "decision") as string;
     mix[decision] = (mix[decision] ?? 0) + 1;
     const max = Number(field(d, "max_settlement_hbar")) || 0;
     if (decision === "approve" || decision === "partial_credit") {
+      resolved++;
       const pct = decision === "approve" ? 100 : Number(field(d, "recommended_credit_pct")) || 0;
       const settled = (pct / 100) * max;
       settledValue += settled;
-      recovered += max - settled; // the partial-credit shortfall avoided
+      const withheld = max - settled;
+      recovered += withheld; // the partial-credit shortfall avoided
+      if (withheld > 0) flagged++;
     } else if (decision === "reject") {
+      resolved++;
       recovered += max; // a full invalid claim not paid
+      flagged++;
     }
   }
-  return Response.json({ count: ds.length, mix, settledValue, recovered });
+  // Deduction-management framing (the buyer's language): the share of resolved claims
+  // where AI caught an over-claim and prevented overpayment.
+  const catchRate = resolved > 0 ? flagged / resolved : 0;
+  return Response.json({ count: adj.length, mix, settledValue, recovered, flagged, catchRate });
 }
