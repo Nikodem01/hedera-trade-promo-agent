@@ -224,3 +224,23 @@ guidance), so Hedera becomes the neutral, tamper-proof *notary* a DB can't be.
   model's original decision and the gate reasons as committed leaves (`safety_gate`), so the
   override is transparent and selectively disclosable. Floor is env-tunable so a curated set sitting
   near the boundary doesn't trip it.
+- **Dossier store encrypted at rest (B1).** AES-256-GCM via `lib/crypto-box.ts`; key from
+  `DOSSIER_ENC_KEY` (scrypt, fixed app salt for deterministic derivation so files stay readable across
+  restarts). Graceful: plaintext fallback when no key (dev), and legacy plaintext files still read. The
+  seal/open round-trip + fail-closed-on-tamper is unit-tested independent of fs/env.
+- **Provable access log (B2/B3).** `lib/access-log.ts` records every disclosure: who (a thin
+  `actor_role` label — attribution only, NOT auth; SoD remains the separate on-chain keys), what
+  (scope/labels), when — sealed off-chain as its own salted commitment, with only a proof-only
+  `kind:"access-log"` record linked to the decision anchored on HCS. Best-effort anchor (a logging
+  failure must never break the disclosure). A consensus-anchored access trail is the SOC2/ISO-42001
+  control made *unforgeable* — a hosted DB log isn't.
+- **Crypto-shredding deletion (B4).** `deleteDossier` removes the off-chain dossier; because only the
+  salted root is on-chain, the commitment becomes permanently un-openable — GDPR/EDPB right-to-erasure
+  satisfied without touching the immutable proof.
+- **Dispute / chargeback as a linked commitment (C1).** `app/api/dispute` records a party contesting a
+  settled/rejected claim as a proof-only commitment linking to the original (mirrors the override
+  anchoring pattern); distinct from override (internal oversight vs a counterparty contesting).
+  Re-adjudication reuses the existing agent negotiation loop — no duplicated logic, no new UI furniture
+  (the ops/BI dashboard + SLA/metrics slice of this axis was deliberately cut). The original decision →
+  dispute → revised outcome form an immutable, selectively-disclosable chain — the "deductions resurface
+  years later" pain made provable.
