@@ -9,6 +9,7 @@ import { Client, TopicMessageSubmitTransaction } from "@hiero-ledger/sdk";
 import { buildDossier, commitmentRecord } from "@/lib/dossier";
 import { putDossier } from "@/lib/dossier-store";
 import { assessAuthenticity } from "@/lib/authenticity";
+import { evaluateSafetyGate } from "./safety-gate";
 import {
   ComplianceAssessment,
   ReviewerAssessment,
@@ -224,6 +225,15 @@ export async function adjudicate(
       : undefined,
   );
 
+  // Deterministic safety gate (code, not the model): makes the independent reviewer
+  // and a confidence floor LOAD-BEARING before any money moves. Can only withhold —
+  // a gated decision becomes escalate_human, for which compute_settlement pays 0.
+  const gate = evaluateSafetyGate({ decision: object.decision, confidence: object.confidence, reviewer: review });
+  if (gate.gated) {
+    object.decision = "escalate_human";
+    object.recommended_credit_pct = 0;
+  }
+
   // Capture the COMPLETE decision provenance off-chain, salt-committed to a Merkle root.
   const dossier = buildDossier({
     contract_text: params.contract_text,
@@ -237,6 +247,7 @@ export async function adjudicate(
     authenticity: JSON.stringify(authenticity),
     citations: JSON.stringify(citations),
     review: JSON.stringify(review),
+    safety_gate: JSON.stringify(gate),
     retailer: params.retailer,
     promotion: params.promotion,
     adjudicated_at,
@@ -255,7 +266,7 @@ export async function adjudicate(
   const anchor =
     client && topicId ? await anchorCommitment(client, topicId, commitmentRecord(dossier)) : null;
 
-  return { ...object, provenance, anchor, authenticity, citations, review };
+  return { ...object, provenance, anchor, authenticity, citations, review, safety_gate: gate };
 }
 
 export class AdjudicateClaimTool extends BaseTool {

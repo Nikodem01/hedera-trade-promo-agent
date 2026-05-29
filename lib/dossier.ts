@@ -48,6 +48,7 @@ export type DossierInput = {
   authenticity?: string; // JSON of the evidence-authenticity signals
   citations?: string; // JSON of the citation-verification results
   review?: string; // JSON of the independent reviewer's audit
+  safety_gate?: string; // JSON of the deterministic safety-gate evaluation (model_decision, reasons)
   retailer?: string;
   promotion?: string;
   adjudicated_at: string;
@@ -72,6 +73,7 @@ export function buildDossier(input: DossierInput): Dossier {
     ...(input.authenticity ? [{ label: "authenticity", value: input.authenticity }] : []),
     ...(input.citations ? [{ label: "citations", value: input.citations }] : []),
     ...(input.review ? [{ label: "reviewer", value: input.review }] : []),
+    ...(input.safety_gate ? [{ label: "safety_gate", value: input.safety_gate }] : []),
     ...(input.retailer ? [{ label: "retailer", value: input.retailer }] : []),
     ...(input.promotion ? [{ label: "promotion", value: input.promotion }] : []),
     { label: "adjudicated_at", value: input.adjudicated_at },

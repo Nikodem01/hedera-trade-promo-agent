@@ -210,3 +210,17 @@ guidance), so Hedera becomes the neutral, tamper-proof *notary* a DB can't be.
 - **Five-way decision** (approve / partial_credit / reject / request_more_evidence /
   escalate_human) so ambiguity is first-class; the borderline → ask-back → revise loop is the
   hero scene.
+
+## v2.3 — enterprise-grade depth (model risk + governance)
+- **Deterministic safety gate makes the independent reviewer load-bearing (A3).** Previously the
+  second-model reviewer's `recommended_action: "escalate"` was captured in the dossier but never
+  acted on — advisory only. Now `lib/plugins/tpp-evaluator/safety-gate.ts` runs in code after the
+  reviewer, before settlement: if the reviewer recommends escalation OR confidence < `CONFIDENCE_FLOOR`
+  (default 0.5), a **final** decision (approve / partial_credit / reject) is forced to
+  `escalate_human` and credit % to 0. It only ever *withholds* — `compute_settlement` pays 0 for
+  `escalate_human`, so this is defense-in-depth on the no-drain invariant, never a way to approve.
+  `request_more_evidence` and `escalate_human` pass through untouched (already safe holding states,
+  and so the negotiation loop / Cadbury demo beat is unaffected). The dossier records both the
+  model's original decision and the gate reasons as committed leaves (`safety_gate`), so the
+  override is transparent and selectively disclosable. Floor is env-tunable so a curated set sitting
+  near the boundary doesn't trip it.

@@ -106,6 +106,7 @@ export type AdjudicationResult = ComplianceAssessmentType & {
   authenticity?: import("@/lib/authenticity").Authenticity;
   citations?: { ref: string; verified: boolean }[];
   review?: ReviewerAssessmentType;
+  safety_gate?: import("./safety-gate").SafetyGate;
 };
 
 export const SettlementProposal = z.object({
