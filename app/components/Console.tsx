@@ -22,6 +22,7 @@ import {
 } from "@/app/console/components";
 import { AuditLedger } from "@/app/console/AuditLedger";
 import { PortfolioPrivate } from "@/app/console/PortfolioPrivate";
+import { ModelRisk } from "@/app/console/ModelRisk";
 import { AccrualFund } from "@/app/console/AccrualFund";
 import { AskPanel } from "@/app/console/AskPanel";
 import { EvidencePanel, EvidenceRequestPanel } from "@/app/console/Evidence";
@@ -407,6 +408,7 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
 
       <AccrualFund refreshKey={auditTick} />
       <PortfolioPrivate refreshKey={auditTick} />
+      <ModelRisk refreshKey={auditTick} />
       <AskPanel />
       <AuditLedger refreshKey={auditTick} />
 

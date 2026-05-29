@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/agent": ["./public/proofs/**"],
     "/": ["./examples/contracts/**"],
+    "/api/quality": ["./docs/validation/**"],
   },
 };
 

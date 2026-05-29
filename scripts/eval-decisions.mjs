@@ -9,7 +9,8 @@
 // Requires the dev server running (pnpm dev) with a working LLM key in its env.
 // Runs are SPACED (EVAL_DELAY_MS, default 20s) to stay under free-tier rate limits.
 // Usage:  node scripts/eval-decisions.mjs   (override host with EVAL_BASE_URL)
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 const BASE = process.env.EVAL_BASE_URL ?? "http://localhost:3000";
 const DELAY = Number(process.env.EVAL_DELAY_MS ?? 20000);
@@ -40,6 +41,7 @@ async function newDecisionAfter(afterSeq, timeoutMs = 25000) {
 }
 
 let failures = 0;
+const results = []; // per-case outcome → the validation report (docs/validation/report.json)
 for (const [idx, c] of CASES.entries()) {
   if (idx > 0) await sleep(DELAY); // space runs to dodge free-tier rate limits
   const before = maxSeq(await decisionRecords());
@@ -51,22 +53,55 @@ for (const [idx, c] of CASES.entries()) {
 
   process.stdout.write(`▶ ${c.id.padEnd(8)} (expect ${c.expect.padEnd(21)}) … `);
   let got = "(none)";
+  let rec = null;
   try {
     const res = await fetch(`${BASE}/api/agent`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok || !res.body) { console.log(`HTTP ${res.status} ✗`); failures++; continue; }
+    if (!res.ok || !res.body) { console.log(`HTTP ${res.status} ✗`); failures++; results.push({ id: c.id, expected: c.expect, actual: null, correct: false, on_chain_seq: null }); continue; }
     // Drain the stream so the agent run (incl. the HCS write) completes.
     const reader = res.body.getReader();
     while (true) { const { done } = await reader.read(); if (done) break; }
-    const rec = await newDecisionAfter(before);
+    rec = await newDecisionAfter(before);
     got = rec ? `${rec.record.decision} (seq #${rec.sequenceNumber}${rec.record.image_hash ? ", img✓" : ""})` : "(no on-chain record)";
-    var decision = rec?.record.decision;
   } catch (e) {
-    console.log(`error: ${e.message} ✗`); failures++; continue;
+    console.log(`error: ${e.message} ✗`); failures++; results.push({ id: c.id, expected: c.expect, actual: null, correct: false, on_chain_seq: null }); continue;
   }
+  const decision = rec?.record?.decision ?? null;
   const ok = decision === c.expect;
   console.log(`${ok ? "✓" : "✗"} ${got}`);
   if (!ok) failures++;
+  results.push({ id: c.id, expected: c.expect, actual: decision, correct: ok, on_chain_seq: rec?.sequenceNumber ?? null });
 }
 
+// Emit the structured validation report — the labeled-accuracy pillar of the model-risk
+// story, read back from the on-chain ledger (so the score reflects what Hedera recorded).
+// Live monitoring metrics (reviewer concurrence, citation integrity, confidence) are
+// surfaced separately by /api/quality across ALL adjudications.
+const correct = results.filter((r) => r.correct).length;
+const confusion = {};
+for (const r of results) {
+  const a = r.actual ?? "(none)";
+  confusion[r.expected] = confusion[r.expected] ?? {};
+  confusion[r.expected][a] = (confusion[r.expected][a] ?? 0) + 1;
+}
+const report = {
+  schema: "PromoProof/validation/v1",
+  generated_at: new Date().toISOString(),
+  set: "pilot — curated adversarial cases",
+  n: results.length,
+  accuracy: results.length ? correct / results.length : 0,
+  cases: results,
+  confusion,
+  methodology:
+    "Each case is a real bespoke trade-promotion contract + a real in-store proof photo with an " +
+    "expert-assigned expected decision. Cases are driven end-to-end through the live agent " +
+    "(/api/agent); the decision is read back from the on-chain HCS audit ledger (not the response " +
+    "stream), so the score reflects what was committed on Hedera. EXPANSION PROTOCOL: add labeled " +
+    "(contract, photo, expected) triples to CASES, stratified across all five decisions and across " +
+    "retailers/placements; re-run to grow N. This is a PILOT set — N is reported honestly.",
+};
+await mkdir(join("docs", "validation"), { recursive: true });
+await writeFile(join("docs", "validation", "report.json"), JSON.stringify(report, null, 2) + "\n");
+
 console.log(`\n${failures === 0 ? "✓ all decisions as expected, recorded on-chain" : `✗ ${failures} mismatch(es)`}`);
+console.log(`📄 docs/validation/report.json — accuracy ${(report.accuracy * 100).toFixed(0)}% on N=${report.n} (pilot)`);
 process.exit(failures === 0 ? 0 : 1);
