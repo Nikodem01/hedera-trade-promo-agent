@@ -6,6 +6,7 @@
 import { AccrualFund } from "./AccrualFund";
 import { PortfolioPrivate } from "./PortfolioPrivate";
 import { Dispute } from "./Dispute";
+import { Ap2Mandate } from "./Ap2Mandate";
 import { WorkspaceIntro } from "./workspace-ui";
 
 export function SettlementFund({ refreshKey, canAct }: { refreshKey?: number; canAct?: boolean }) {
@@ -18,6 +19,7 @@ export function SettlementFund({ refreshKey, canAct }: { refreshKey?: number; ca
       <AccrualFund refreshKey={refreshKey} canAct={canAct} />
       <PortfolioPrivate refreshKey={refreshKey} />
       <Dispute canAct={canAct} />
+      <Ap2Mandate canAct={canAct} />
     </div>
   );
 }
