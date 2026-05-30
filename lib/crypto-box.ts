@@ -3,6 +3,7 @@
 // independent of the filesystem and process env. The key is derived from a high-entropy
 // secret (DOSSIER_ENC_KEY) via scrypt; the salt is fixed and app-specific on purpose so
 // derivation is DETERMINISTIC — encrypted files must stay readable across restarts.
+import "server-only";
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from "node:crypto";
 
 const SALT = "promoproof-dossier-v1";

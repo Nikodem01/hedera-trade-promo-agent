@@ -7,6 +7,7 @@
 // log is editable by whoever hosts it; a consensus-anchored one cannot be altered or
 // backdated, and a counterparty/auditor can verify it without trusting our server.
 // Same confidentiality model as adjudication: commitments on-chain, business data off.
+import "server-only";
 import { getOperatorClient } from "./hedera/client";
 import { TopicMessageSubmitTransaction } from "@hiero-ledger/sdk";
 import { buildCommitment, type Dossier } from "./dossier";

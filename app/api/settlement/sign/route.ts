@@ -5,6 +5,7 @@
 // no single key, and certainly not the agent, can move the funds. On execution we
 // mint the attestation NFT (metadata = the decision commitment).
 import { getOperatorClient } from "@/lib/hedera/client";
+import { requireAccess } from "@/lib/guard";
 import {
   PrivateKey,
   ScheduleSignTransaction,
@@ -16,6 +17,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "settle", limit: 20, windowMs: 60_000 } });
+  if (denied) return denied;
   const { scheduleId, role, commitment } = (await req.json()) as {
     scheduleId?: string;
     role?: "brand" | "retailer";

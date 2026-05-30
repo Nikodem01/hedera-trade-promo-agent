@@ -3,6 +3,7 @@
 // through the LLM. Mirrors the bounty's image rules (JPG/PNG/WEBP, ≤6MB).
 import { randomUUID } from "node:crypto";
 import { saveUpload } from "@/lib/uploads";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,8 @@ const EXT: Record<string, string> = {
 const MAX_BYTES = 6 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "upload", limit: 20, windowMs: 60_000 } });
+  if (denied) return denied;
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) {

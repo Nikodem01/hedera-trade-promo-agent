@@ -5,11 +5,14 @@ import { getOperatorClient } from "@/lib/hedera/client";
 import { TopicMessageSubmitTransaction } from "@hiero-ledger/sdk";
 import { allDossiers } from "@/lib/dossier-store";
 import { batchRoot, putBatch, sealedCommitments } from "@/lib/batch-store";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "batch", limit: 10, windowMs: 60_000 } });
+  if (denied) return denied;
   const sealed = await sealedCommitments();
   const commitments = (await allDossiers())
     .map((d) => d.commitment)

@@ -32,6 +32,7 @@ This is verified by `tests/injection.test.ts` (adversarial "drain" prompts canno
 | Proof-of-performance fraud (photo reuse) | Keyed image fingerprint anchored on-chain; cross-claim reuse is detectable without re-identifying the image |
 | Model hallucination / unsupported decision | Independent second-model review + safety gate; citation verification |
 | Right-to-erasure vs immutability | Crypto-shredding: delete the off-chain salted data → the on-chain commitment is permanently opaque |
+| Public-internet exposure / API abuse | Reverse proxy (TLS, rate-limit, size cap) + a per-route `requireAccess` guard (`lib/guard.ts`) enforced IN handlers, not middleware (CVE-2025-29927); in `PUBLIC_READONLY` mode anonymous callers get read-only routes only, mutating/expensive routes need the operator token; same-origin (CSRF) check + in-memory rate limit; `import 'server-only'` keeps key modules off the client bundle. See `docs/DEPLOY.md`. |
 
 ## Key management
 Operator and party keys are server-only (`lib/hedera/client.ts`). `DOSSIER_ENC_KEY` derives the at-rest
@@ -43,5 +44,14 @@ AES key via scrypt with a fixed app salt (deterministic so files stay readable a
   horizontally scalable and cleared on reboot; production target is an access-controlled, replicated
   encrypted store (one-function swap behind `lib/dossier-store.ts`).
 - **`pUSDC` is a self-minted demo stand-in**, not real USDC; testnet amounts are play-money.
-- **No app-level auth/RBAC** — demo personas only. Segregation of duties is enforced on-chain (separate
-  keys), not by an IdP. A `actor_role` label provides attribution in the access log, not access control.
+- **No multi-user auth/RBAC** — demo personas only. Segregation of duties is enforced on-chain (separate
+  keys), not by an IdP; the `actor_role` label is attribution, not access control. For public hosting,
+  access is gated by a single shared **operator token** (`PUBLIC_READONLY` mode + `lib/guard.ts`) and the
+  reverse proxy — anonymous visitors get the read-only views + scripted demo, never the live keys.
+
+## Public deployment
+Hosting is hardened per `docs/DEPLOY.md`: a dedicated low-balance testnet operator account (blast-radius
+limiting), nginx TLS + rate limit + size cap (and an optional whole-site password), `ufw` + SSH
+hardening, a non-root `systemd` service, a `chmod 600` env file, security headers (`next.config.ts`),
+and Next kept patched. The exposure model: **public = read-only + interactive scripted demo; live agent
+and all fund-touching actions = gated.**

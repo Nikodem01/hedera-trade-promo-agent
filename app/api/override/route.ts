@@ -7,11 +7,14 @@ import { getOperatorClient } from "@/lib/hedera/client";
 import { TopicMessageSubmitTransaction } from "@hiero-ledger/sdk";
 import { buildCommitment } from "@/lib/dossier";
 import { putDossier } from "@/lib/dossier-store";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "override", limit: 20, windowMs: 60_000 } });
+  if (denied) return denied;
   const b = (await req.json()) as {
     original_commitment?: string;
     prior_decision?: string;

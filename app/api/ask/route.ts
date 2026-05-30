@@ -5,6 +5,7 @@
 import { generateText } from "ai";
 import { orchestratorModel } from "@/lib/agent/model";
 import { allDossiers } from "@/lib/dossier-store";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
 const field = (d: { fields: { label: string; value: string }[] }, label: string) => d.fields.find((f) => f.label === label)?.value ?? "";
 
 export async function POST(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "ask", limit: 15, windowMs: 60_000 } });
+  if (denied) return denied;
   const { question } = (await req.json()) as { question?: string };
   if (!question || !question.trim()) return Response.json({ error: "question required" }, { status: 400 });
 

@@ -6,6 +6,7 @@
 // registration via the official DID SDK is the production path; this is the VC shape.)
 import { getDossier } from "@/lib/dossier-store";
 import { PrivateKey } from "@hiero-ledger/sdk";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,8 @@ export const dynamic = "force-dynamic";
 const field = (d: { fields: { label: string; value: string }[] }, label: string) => d.fields.find((f) => f.label === label)?.value ?? "";
 
 export async function GET(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "credential", limit: 40, windowMs: 60_000 } });
+  if (denied) return denied;
   const commitment = new URL(req.url).searchParams.get("commitment");
   if (!commitment) return Response.json({ error: "commitment required" }, { status: 400 });
   const d = await getDossier(commitment);

@@ -6,11 +6,14 @@
 import { discloseFields } from "@/lib/dossier";
 import { getDossier } from "@/lib/dossier-store";
 import { logAccess } from "@/lib/access-log";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "disclose", limit: 40, windowMs: 60_000 } });
+  if (denied) return denied;
   const { commitment, labels, actor_role, scope } = (await req.json()) as {
     commitment?: string;
     labels?: string[];

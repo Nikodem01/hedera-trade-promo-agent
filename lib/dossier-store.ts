@@ -8,6 +8,7 @@
 // (required in production; documented in docs/SECURITY.md). Without the key it falls
 // back to plaintext for local dev. Reads transparently handle both, so legacy plaintext
 // files and newly-encrypted ones coexist.
+import "server-only";
 import { mkdir, readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

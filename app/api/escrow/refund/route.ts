@@ -3,12 +3,15 @@
 // long-term transfer (escrow → brand) with waitForExpiry=true, so Hedera executes it
 // automatically at the window end — no manual settlement, no custodian.
 import { getOperatorClient } from "@/lib/hedera/client";
+import { requireAccess } from "@/lib/guard";
 import { PrivateKey, AccountBalanceQuery, TransferTransaction, ScheduleCreateTransaction, Timestamp } from "@hiero-ledger/sdk";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "refund", limit: 10, windowMs: 60_000 } });
+  if (denied) return denied;
   const token = process.env.PUSDC_TOKEN_ID;
   const escrow = process.env.PROMO_ESCROW_ID;
   const brand = process.env.BRAND_TREASURY_ID;
