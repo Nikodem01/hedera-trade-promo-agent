@@ -32,6 +32,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Self-host build: a minimal standalone server (.next/standalone/server.js) so we can
+  // build locally and ship a small bundle to the 1GB Oracle box without building there.
+  output: "standalone",
   // Ensure runtime-read fixtures ship in the serverless function bundles on Vercel:
   // the agent route reads proof image bytes from public/proofs; the home page
   // (server component) reads the bespoke contract text from examples/contracts.
