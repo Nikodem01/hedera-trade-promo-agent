@@ -10,6 +10,10 @@
 Built for the **Hedera AI Bounty — Week 2 (Enterprise Agent + Plugin)** on the
 [Hedera Agent Kit](https://github.com/hashgraph/hedera-agent-kit-js) v4.
 
+**▶ Live:** https://promoproof.liftbyai.com (public read-only + scripted demo; operator mode runs the live agent) ·
+**On-chain (testnet):** [HCS topic](https://hashscan.io/testnet/topic/0.0.9069962) · [attestation NFT](https://hashscan.io/testnet/token/0.0.9088330) · [pUSDC](https://hashscan.io/testnet/token/0.0.9089483) ·
+**Agent-payments standard:** [AP2-aligned payment mandate](docs/AP2.md), backed by Hedera consensus.
+
 ## The problem
 
 CPG brands pay retailers ~$30B/year in trade promotions — slotting fees, end-cap rentals, co-op
