@@ -76,10 +76,28 @@ sides: the AI judgement is auditable, and the settlement is trustless + confiden
   `AccrualFund`, `PortfolioPrivate`, `Dispute`, `Ap2Mandate`).
 - Reference: `README.md`, `docs/ARCHITECTURE.md`, `docs/DEMO_SCRIPT.md`, `docs/AP2.md`.
 
+## Tone & feel — hold their hand (this is the whole point)
+The visitor is a curious **non-expert**, not an operator. The experience must feel like a **calm,
+guided tour with a warm narrator** — they are never lost, never guess where to click, never hit a wall
+of jargon. Metaphor from the founder: *the sun is shining, birds are singing, the view is breathtaking,
+and a soothing voice is calmly telling them the tale of PromoProof and how wonderfully it works and
+leverages the technology.* Translate that into concrete UX:
+- **One idea per step.** Plain, confident, friendly copy that tells the *story* of a single claim moving
+  through PromoProof — not terse panels competing for attention.
+- **Never lost.** A clear "you are here / what's next"; a single obvious way forward (Continue / auto-pace).
+- **Show, then explain.** Each step shows the real thing happening, then says — warmly — *what it is and
+  why it matters*, including how the Hedera tech (HCS, scheduled tx, the Agent Kit plugin) is present and
+  why it's the right tool.
+- **Beauty in service of clarity.** Keep the gorgeous existing aesthetic; use smooth reveals
+  (`anim-reveal`/`seal`), generous whitespace. Keep the **"Public demo · read-only"** badge — the founder
+  loves it; it sets the calm, browse-freely tone.
+- By the end the visitor should feel they understood something genuinely impressive — and *how* the
+  agent + Hedera make it work. **If a step needs prior knowledge to make sense, redesign that step.**
+
 ## Design direction: a guided, self-explaining narrative
-Build a **guided walkthrough** as the primary experience (front door / a prominent "Guided tour"), on
-the **deterministic scenario data** (reliable for recording + safe for the public deploy), with the
-dense operator console kept available behind it. Lead the viewer through the story; **each step is a
+Build a **guided walkthrough** as the primary public experience (the front door — this IS the
+"Public demo · read-only"), on the **deterministic scenario data** (reliable for recording + safe for
+the public deploy), with the dense operator console kept available behind it. Lead the viewer through the story; **each step is a
 "scene" that teaches**: a clear heading, one or two plain-language sentences (*what's happening + why it
 matters*), the **actual tech shown and annotated**, and a clickable on-chain proof where real. Use
 progressive disclosure — start simple, reveal depth on demand. Generous labeling. Think "annotated
@@ -125,8 +143,11 @@ Kit **plugin** used? 4. What went on-chain and what stayed private — and why? 
 If they can't answer those from watching, it is **not done**. Optimize for that, not for visual density.
 
 ## Context / logistics
-- One-shot bounty submission; Week 2 closes Sun 2026-05-31 23:59 UTC (a quality rebuild may need more
-  time — flag to the founder if so; a later week is an option).
+- **Decision is FINAL: submit Week 2, tomorrow (Sun 2026-05-31 23:59 UTC).** This is a 24h legibility
+  rebuild and is entirely doable — the hard part (backend, agent, plugin, on-chain, security, AP2) is
+  built, tested, and deployed; you're crafting explanatory UX on existing components + deterministic
+  data, not new tech. Ship scope: the guided public walkthrough, polished enough to record the ≤90s
+  video and to stand as the live URL. Move fast; do not relitigate the week or scope.
 - Deployed: promoproof.liftbyai.com (Oracle box; `PUBLIC_READONLY=1`; operator token unlocks live mode).
   Build is **standalone** (`output: "standalone"`); deploy via `docs/DEPLOY_PROMOPROOF.md` (build locally,
   rsync the bundle, `systemctl restart promoproof`).
