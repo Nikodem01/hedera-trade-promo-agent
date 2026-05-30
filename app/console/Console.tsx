@@ -50,7 +50,7 @@ function composerStateOf(runState: RunState): "empty" | "streaming" | "verdict" 
   return "verdict";
 }
 
-export default function Console() {
+export default function Console({ embedded }: { embedded?: boolean } = {}) {
   const [scenarioId, setScenarioId] = useState<string>("oreo");
   const [runState, setRunState] = useState<RunState>("empty");
 
@@ -83,7 +83,7 @@ export default function Console() {
 
   return (
     <>
-      <Header />
+      {!embedded && <Header />}
       <ClaimPicker active={runState === "empty" ? null : scenarioId} onSelect={selectClaim} />
       <main className="flex-1 max-w-[1100px] w-full mx-auto px-6 md:px-8 pt-2 pb-10">
         {runState === "empty" ? (

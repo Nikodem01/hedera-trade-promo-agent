@@ -8,7 +8,7 @@ import { ExternalIcon } from "./primitives";
 
 type Escrow = { configured: boolean; token?: string; escrowAccount?: string; retailerAccount?: string; accrualBalance?: number; released?: number };
 
-export function AccrualFund({ refreshKey }: { refreshKey?: number }) {
+export function AccrualFund({ refreshKey, canAct = true }: { refreshKey?: number; canAct?: boolean }) {
   const [d, setD] = useState<Escrow | null>(null);
   const [refund, setRefund] = useState<{ scheduleId: string; refundAmount: number; executesAt: string } | null>(null);
   const [refunding, setRefunding] = useState(false);
@@ -63,8 +63,8 @@ export function AccrualFund({ refreshKey }: { refreshKey?: number }) {
             {refund ? (
               <span className="mono text-[10px]" style={{ color: "var(--emerald)" }}>↩ refund scheduled · {refund.refundAmount.toFixed(0)} pUSDC · executes {new Date(refund.executesAt).toISOString().replace("T", " ").replace(/\..*/, " UTC")} · sched {refund.scheduleId}</span>
             ) : (
-              <button onClick={doRefund} disabled={refunding} className="mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-[3px]" style={{ background: "transparent", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: refunding ? "wait" : "pointer" }}>
-                {refunding ? "scheduling…" : "Close promo · refund unspent"}
+              <button onClick={doRefund} disabled={refunding || !canAct} className="mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-[3px]" style={{ background: "transparent", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: refunding ? "wait" : canAct ? "pointer" : "not-allowed" }}>
+                {refunding ? "scheduling…" : canAct ? "Close promo · refund unspent" : "Refund · operator only"}
               </button>
             )}
           </div>

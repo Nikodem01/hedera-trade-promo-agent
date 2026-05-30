@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import Console, { type Scenario } from "./components/Console";
+import { type Scenario } from "./components/Console";
+import { Shell } from "./console/Shell";
 
 // Server-side scenario catalog. Contract prose is read from the fixtures so the
 // client never duplicates it; the proof image + retailer narrative complete the claim.
@@ -48,5 +49,5 @@ export default async function Page() {
     })),
   );
 
-  return <Console scenarios={scenarios} />;
+  return <Shell scenarios={scenarios} />;
 }

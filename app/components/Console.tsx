@@ -11,7 +11,6 @@ import {
 } from "ai";
 import type { ComplianceAssessmentType } from "@/lib/plugins/tpp-evaluator/schemas";
 import {
-  Header,
   TimelineRow,
   ToolChip,
   VerdictCard,
@@ -20,11 +19,6 @@ import {
   Dossier,
   type CardScenario,
 } from "@/app/console/components";
-import { AuditLedger } from "@/app/console/AuditLedger";
-import { PortfolioPrivate } from "@/app/console/PortfolioPrivate";
-import { ModelRisk } from "@/app/console/ModelRisk";
-import { AccrualFund } from "@/app/console/AccrualFund";
-import { AskPanel } from "@/app/console/AskPanel";
 import { EvidencePanel, EvidenceRequestPanel } from "@/app/console/Evidence";
 import { ProseMarkdown } from "@/app/console/Markdown";
 
@@ -214,7 +208,7 @@ function ClaimPickerLive({ scenarios, active, busy, onSelect, onImport }: { scen
   );
 }
 
-export default function Console({ scenarios }: { scenarios: Scenario[] }) {
+export default function Console({ scenarios, onRunComplete }: { scenarios: Scenario[]; onRunComplete?: () => void }) {
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/agent" }),
   });
@@ -224,13 +218,13 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
   const [highlightedClause, setHighlightedClause] = useState<string | null>(null);
   const busy = status === "submitted" || status === "streaming";
 
-  // Re-read the on-chain ledger each time a run finishes (records are confirmed by then).
-  const [auditTick, setAuditTick] = useState(0);
+  // When a run finishes the on-chain records are confirmed — tell the shell so the
+  // read-only panels (Trust Center, Model Risk, Settlement) refresh.
   const prevBusy = useRef(busy);
   useEffect(() => {
-    if (prevBusy.current && !busy) setAuditTick((t) => t + 1);
+    if (prevBusy.current && !busy) onRunComplete?.();
     prevBusy.current = busy;
-  }, [busy]);
+  }, [busy, onRunComplete]);
 
   function submitClaim(s: Scenario) {
     setActive(s);
@@ -263,7 +257,6 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
 
   return (
     <>
-      <Header />
       <ClaimPickerLive scenarios={[...scenarios, ...imported]} active={active?.id ?? null} busy={busy} onSelect={submitClaim} onImport={(s) => setImported((p) => [...p, s])} />
 
       <main className="flex-1 max-w-[1100px] w-full mx-auto px-6 md:px-8 pt-2 pb-10">
@@ -405,12 +398,6 @@ export default function Console({ scenarios }: { scenarios: Scenario[] }) {
           </section>
         )}
       </main>
-
-      <AccrualFund refreshKey={auditTick} />
-      <PortfolioPrivate refreshKey={auditTick} />
-      <ModelRisk refreshKey={auditTick} />
-      <AskPanel />
-      <AuditLedger refreshKey={auditTick} />
 
       <div className="hairline-t" style={{ background: "var(--paper-2)" }}>
         <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-3 flex items-center gap-3">
