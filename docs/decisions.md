@@ -244,3 +244,25 @@ guidance), so Hedera becomes the neutral, tamper-proof *notary* a DB can't be.
   (the ops/BI dashboard + SLA/metrics slice of this axis was deliberately cut). The original decision →
   dispute → revised outcome form an immutable, selectively-disclosable chain — the "deductions resurface
   years later" pain made provable.
+
+## v2.4 — secure public hosting + enterprise UI shell
+- **Security boundary is the reverse proxy + per-route guards, NOT middleware.** Next middleware is
+  bypassable (CVE-2025-29927) and "not a security boundary"; so `lib/guard.ts#requireAccess` is enforced
+  INSIDE each of the 11 mutating/expensive route handlers (agent, ask, settlement/sign, escrow/refund,
+  override, dispute, upload, contract/parse, disclose, batch/seal, credential). Same-origin (CSRF) check
+  + in-memory rate limiter (`lib/ratelimit.ts`). Security headers via `next.config.ts headers()` (CSP
+  shipped Report-Only first to not break the inline-style UI — flip to enforced after a visual check).
+  `import 'server-only'` on key modules (vitest aliases it to a no-op shim). Host hardening in
+  `docs/DEPLOY.md`. **Dedicated low-balance testnet account** for public deploys caps blast radius.
+- **Exposure model (founder asked "should anonymous users run adjudication?" → no):** SOTA for public
+  demos of expensive AI+chain actions is an interactive *scripted* demo + read-only trust center, with
+  the live backend gated. So `PUBLIC_READONLY=1` → anonymous visitors get the scripted Adjudication tour
+  (`/preview`'s deterministic console, embedded) + read-only views; the live agent + all fund-touching
+  actions require the operator token (`OPERATOR_ACCESS_TOKEN` via `x-operator-token`/`op_token` cookie).
+  `/api/config` tells the client which mode; an unlock field flips public→operator for the session.
+- **UI = app shell + 4 workspaces (NOT a BI dashboard — that furniture stays cut).** `app/console/Shell.tsx`
+  wraps the existing audit-grade design system: Adjudication (live/scripted), Trust Center (public ledger
+  + NEW `AccessLog` of disclosure/override/dispute events + operator audit query), Model Risk (the strip
+  promoted to a full MRM view), Settlement & Fund (accrual + portfolio + NEW `Dispute` raise UI). Client-
+  side workspace switching keeps the live agent stream mounted (`hidden`); the live `Console` was slimmed
+  to the Adjudication body (its 5 trailing panels moved into workspaces; `onRunComplete` refreshes them).

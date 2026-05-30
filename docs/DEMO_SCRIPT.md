@@ -17,3 +17,20 @@ testnet, with HashScan + the Mirror Node open in a second tab.
 **Optional beat:** the **Ritz** claim → **REJECT** ("location not met — aisle, not checkout") — committed on-chain, zero paid; and a **duplicate-proof** flag when the same photo is reused under a second claim.
 
 **Pre-record checklist:** `LLM_PROVIDER` + LLM key set; `setup-hedera.mjs` + `setup-settlement.mjs` run and their ids in `.env.local`; warm the operator balance; run `scripts/test-v2-flow.mjs` once to confirm the full arc; HashScan testnet + Mirror Node open.
+
+## Console layout & navigation (v2.4 shell)
+
+The app is now a workspace shell (top nav): **Adjudication · Trust Center · Model Risk · Settlement & Fund.**
+The script maps onto it:
+- **Beats 2–6 (adjudicate → verify → negotiate → settle)** happen in **Adjudication**. "Verify against chain"
+  (beats 3–4) is the **VerifyPanel on the verdict card** itself.
+- After settling, a strong enterprise closer (≈8–10s): click **Trust Center** → the public commitment
+  ledger (hash + timestamp only) and the **provable access & oversight log** (your verify/disclose just
+  appeared there as a tamper-proof, linked event); then **Model Risk** → reviewer concurrence, citation
+  integrity, safety-gate holds, pilot validation. Caption: *"Every decision is model-risk-managed and
+  every access is provable — the diligence an enterprise actually runs."*
+
+**Recording modes.** For a flawless take, record locally where the live agent runs (operator mode). To
+showcase the hosted URL safely, the public lands in **read-only + scripted** mode (no keys, deterministic);
+click **Operator access**, enter the token, and the live agent + on-chain actions unlock. Either way the
+on-chain artifacts (HashScan) are real.
