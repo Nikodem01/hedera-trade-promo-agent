@@ -160,6 +160,20 @@ const LEDGER_TOOLS = new Set([
 type LiveToolPart = { state?: string; input?: unknown; output?: unknown; errorText?: string };
 type ToolUIPart = Parameters<typeof getToolOrDynamicToolName>[0];
 type StreamPart = Parameters<typeof isToolOrDynamicToolUIPart>[0];
+type LiveNftAttestation =
+  | { status: "idle" | "resolving" | "not_found" | "error"; data?: null }
+  | {
+      status: "found";
+      data: {
+        found: true;
+        tokenId: string;
+        serialNumber: string;
+        accountId: string | null;
+        createdTimestamp: string | null;
+        metadata: string;
+        mirrorUrl: string;
+      };
+    };
 
 /** One streamed tool call — a spinner + live "Invoking Hedera Agent Kit…" line while it
  * runs, resolving to a checked result row when the output lands. */
@@ -209,6 +223,57 @@ function LiveTextBubble({ text }: { text: string }) {
 
 type LiveProvenance = { commitment: string; image_fp?: string; model?: string; adjudicated_at?: string };
 type LiveAnchor = { topicId?: string; sequenceNumber?: number; transactionId?: string };
+
+function useLiveNftAttestation(commitment: string | undefined, enabled: boolean): LiveNftAttestation {
+  const [state, setState] = useState<LiveNftAttestation>({ status: "idle" });
+
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (!enabled || !commitment) {
+      setState({ status: "idle" });
+      return () => { alive = false; };
+    }
+
+    async function resolve(attempt: number) {
+      if (!alive || !commitment) return;
+      setState((s) => (s.status === "found" ? s : { status: "resolving" }));
+      try {
+        const res = await fetch("/api/demo/nft-attestation", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ commitment }),
+        });
+        const json = await res.json();
+        if (!alive) return;
+        if (res.ok && json?.found) {
+          setState({ status: "found", data: json });
+          return;
+        }
+        if (res.status === 404 && attempt < 15) {
+          timer = setTimeout(() => resolve(attempt + 1), 2000);
+          return;
+        }
+        setState({ status: res.status === 404 ? "not_found" : "error" });
+      } catch {
+        if (!alive) return;
+        if (attempt < 15) {
+          timer = setTimeout(() => resolve(attempt + 1), 2000);
+          return;
+        }
+        setState({ status: "error" });
+      }
+    }
+
+    resolve(0);
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [commitment, enabled]);
+
+  return state;
+}
 
 function isAssessment(out: Record<string, unknown> | null): out is ComplianceAssessmentType & {
   provenance?: LiveProvenance;
@@ -456,6 +521,59 @@ function formatMirrorTs(ts: string): string {
   return new Date(secs * 1000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
 }
 
+function formatNftMintTs(ts: string | null): string | null {
+  if (!ts) return null;
+  const secs = Number(ts.split(".")[0]);
+  if (!Number.isFinite(secs)) return ts;
+  const date = new Date(secs * 1000);
+  const utc = date.toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  const local = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+  return `${utc} · ${local}`;
+}
+
+function LiveNftReceiptBadge({ attestation }: { attestation: LiveNftAttestation }) {
+  if (attestation.status === "found" && attestation.data) {
+    const mintedAt = formatNftMintTs(attestation.data.createdTimestamp);
+    return (
+      <>
+        <a href={attestation.data.mirrorUrl} target="_blank" rel="noreferrer" className="mono text-[10.5px] px-2 py-0.5 rounded-sm flex items-center gap-1" style={{ color: "var(--emerald)", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>
+          fresh NFT serial #{attestation.data.serialNumber}<ExternalIcon size={9} />
+        </a>
+        {mintedAt && <span className="mono text-[10.5px]" style={{ color: "var(--ink-faint)" }}>minted {mintedAt}</span>}
+        <a href={HASHSCAN.nftAttestation} target="_blank" rel="noreferrer" className="mono text-[10.5px] px-2 py-0.5 rounded-sm flex items-center gap-1" style={{ color: "var(--ink-mute)", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+          collection {attestation.data.tokenId}<ExternalIcon size={9} />
+        </a>
+      </>
+    );
+  }
+
+  if (attestation.status === "resolving") {
+    return (
+      <span className="mono text-[10.5px] px-2 py-0.5 rounded-sm" style={{ color: "var(--blue)", background: "var(--blue-bg)", boxShadow: "inset 0 0 0 1px rgba(29,78,216,0.18)" }}>
+        attestation mint submitted · resolving fresh serial…
+      </span>
+    );
+  }
+
+  if (attestation.status === "not_found" || attestation.status === "error") {
+    return (
+      <a href={HASHSCAN.nftAttestation} target="_blank" rel="noreferrer" className="mono text-[10.5px] px-2 py-0.5 rounded-sm flex items-center gap-1" style={{ color: "var(--ink-mute)", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+        mint submitted · collection {HASHSCAN.nftAttestationId}<ExternalIcon size={9} />
+      </a>
+    );
+  }
+
+  return null;
+}
+
 function LiveVerifyReplay({ assessment }: { assessment: ReturnType<typeof liveToolOutput> }) {
   const provenance = assessment?.provenance && typeof assessment.provenance === "object" ? assessment.provenance as LiveProvenance : null;
   const anchor = assessment?.anchor && typeof assessment.anchor === "object" ? assessment.anchor as LiveAnchor : null;
@@ -540,11 +658,13 @@ function LiveSettleState({
   settlement,
   proposal,
   nft,
+  nftAttestation,
 }: {
   assessment: ComplianceAssessmentType;
   settlement: SettlementProposalType | null;
   proposal: Record<string, unknown> | null;
   nft: Record<string, unknown> | null;
+  nftAttestation: LiveNftAttestation;
 }) {
   const scheduleId = stringField(proposal, "scheduleId");
   const amount = settlement?.amount_hbar ?? numberField(settlement, "amount") ?? 0;
@@ -577,21 +697,24 @@ function LiveSettleState({
         <div className="mt-3 rounded-[4px] px-3 py-2.5 flex items-center gap-2.5 flex-wrap" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>
           <span className="text-[13px]" style={{ color: "var(--emerald)" }}>✓</span>
           <span className="text-[12.5px]" style={{ color: "var(--ink)" }}>Settlement proposal created on Hedera; signatures remain human-controlled.</span>
-          {nft && <a href={HASHSCAN.nftAttestation} target="_blank" rel="noreferrer" className="mono text-[10.5px] px-2 py-0.5 rounded-sm flex items-center gap-1" style={{ color: "var(--emerald)", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>attestation NFT tool executed<ExternalIcon size={9} /></a>}
+          {nft && <LiveNftReceiptBadge attestation={nftAttestation} />}
         </div>
       </div>
     </div>
   );
 }
 
-function LiveArtifactsRecap({ proposal }: { proposal: Record<string, unknown> | null }) {
+function LiveArtifactsRecap({ proposal, nftAttestation }: { proposal: Record<string, unknown> | null; nftAttestation: LiveNftAttestation }) {
   const scheduleId = stringField(proposal, "scheduleId");
   return (
     <div className="rounded-[5px] p-5" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
       <Lbl>Live Hedera artifacts · direct testnet links</Lbl>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-3">
         <ProofLink label="HCS audit topic" id={HASHSCAN.hcsAuditId} sub="topic" href={HASHSCAN.hcsAudit} />
-        <ProofLink label="Attestation NFT" id={HASHSCAN.nftAttestationId} sub="token" href={HASHSCAN.nftAttestation} />
+        {nftAttestation.status === "found" && nftAttestation.data && (
+          <ProofLink label={`NFT serial #${nftAttestation.data.serialNumber}`} id={nftAttestation.data.tokenId} sub="fresh attestation" href={nftAttestation.data.mirrorUrl} />
+        )}
+        <ProofLink label="NFT collection" id={HASHSCAN.nftAttestationId} sub="token collection" href={HASHSCAN.nftAttestation} />
         <ProofLink label="pUSDC" id={HASHSCAN.pusdcId} sub="token" href={HASHSCAN.pusdc} />
         <ProofLink label="Brand treasury" id={HASHSCAN.brandId} sub="account" href={HASHSCAN.brand} />
         <ProofLink label="Retailer" id={HASHSCAN.retailerId} sub="account" href={HASHSCAN.retailer} />
@@ -607,6 +730,7 @@ function LiveGovernanceVault({
   settlement,
   proposal,
   nft,
+  nftAttestation,
   stream,
 }: {
   assessment: ComplianceAssessmentType;
@@ -614,6 +738,7 @@ function LiveGovernanceVault({
   settlement: SettlementProposalType | null;
   proposal: Record<string, unknown> | null;
   nft: Record<string, unknown> | null;
+  nftAttestation: LiveNftAttestation;
   stream: StreamPart[];
 }) {
   const provenance = rawAssessment?.provenance && typeof rawAssessment.provenance === "object" ? rawAssessment.provenance as LiveProvenance : null;
@@ -629,7 +754,7 @@ function LiveGovernanceVault({
       `live-adjudication:${provenance?.commitment ?? "pending"}:${assessment.decision}`,
       `live-hcs-anchor:${HASHSCAN.hcsAuditId}:${anchor?.sequenceNumber ?? "pending"}`,
       `live-schedule:${scheduleId ?? "pending"}:${amount}`,
-      `live-nft-tool:${nft ? "executed" : "pending"}:${provenance?.commitment ?? "pending"}`,
+      `live-nft-serial:${nftAttestation.status === "found" ? nftAttestation.data.serialNumber : nft ? "submitted" : "pending"}:${provenance?.commitment ?? "pending"}`,
     ];
     (async () => {
       const out = await Promise.all(actions.map(async (a) => {
@@ -639,7 +764,7 @@ function LiveGovernanceVault({
       if (alive) setHashes(out);
     })();
     return () => { alive = false; };
-  }, [provenance?.commitment, assessment.decision, anchor?.sequenceNumber, scheduleId, amount, nft]);
+  }, [provenance?.commitment, assessment.decision, anchor?.sequenceNumber, scheduleId, amount, nft, nftAttestation]);
 
   const toolNames = stream.filter(isToolOrDynamicToolUIPart).map((p) => getToolOrDynamicToolName(p));
   const mandate = buildPaymentMandate({
@@ -669,16 +794,17 @@ function LiveGovernanceVault({
             <VaultRow label="Credit" value={`${assessment.recommended_credit_pct}%`} sub={`max ${assessment.max_settlement_hbar} pUSDC`} />
             <VaultRow label="Criteria evaluated" value={String(assessment.criteria.length)} sub="clause-level findings with boxes" />
             <VaultRow label="Tool chain" value={`${toolNames.length} calls`} sub={toolNames.join(" → ")} accent="blue" />
+            <VaultRow label="NFT receipt" value={nftAttestation.status === "found" && nftAttestation.data ? `serial #${nftAttestation.data.serialNumber}` : nft ? "submitted" : "not requested"} sub={nftAttestation.status === "found" && nftAttestation.data?.createdTimestamp ? `minted ${formatMirrorTs(nftAttestation.data.createdTimestamp)}` : "metadata = commitment only"} />
           </div>
           <pre className="mono text-[10.5px] leading-[1.45] max-h-[260px] overflow-auto mt-2 p-3 rounded-[4px] whitespace-pre-wrap" style={{ background: "var(--paper)", color: "var(--ink-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-            {JSON.stringify({ assessment, provenance, anchor, settlement, proposal, nft }, null, 2)}
+            {JSON.stringify({ assessment, provenance, anchor, settlement, proposal, nft, nftAttestation }, null, 2)}
           </pre>
         </section>
 
         <section>
           <Lbl>Live access logs · cryptographic action hashes</Lbl>
           <div className="mt-2 rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-            {["adjudication dossier sealed", "proof-only HCS anchor written", "scheduled transfer proposed", "attestation metadata minted"].map((action, i) => (
+            {["adjudication dossier sealed", "proof-only HCS anchor written", "scheduled transfer proposed", "attestation serial resolved"].map((action, i) => (
               <div key={action} className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-2 px-4 py-2.5 hairline-b text-[11.5px]">
                 <span style={{ color: "var(--ink-mute)" }}>{action}</span>
                 <span className="mono truncate" title={hashes[i]} style={{ color: "var(--ink-faint)" }}>{hashes[i] ? `sha256:${truncMid(hashes[i], 14, 10)}` : "hashing…"}</span>
@@ -716,6 +842,7 @@ export function LiveColumn() {
   const settlementOut = liveToolOutput(stream, "compute_settlement") as SettlementProposalType | null;
   const proposalOut = liveToolOutput(stream, "propose_settlement");
   const nftOut = liveToolOutput(stream, "mint_non_fungible_token_tool");
+  const nftAttestation = useLiveNftAttestation(liveAssessment?.provenance?.commitment, !!nftOut);
   const quotaish = error && /429|rate|quota|too many/i.test(error.message);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scenario: CardScenario = {
@@ -824,12 +951,12 @@ export function LiveColumn() {
               <LiveVerifyReplay assessment={adjudicationOut} />
             </LiveStep>
             <LiveStep step={8} label="Settled safely" title="The live scheduled transfer exposes the mutual-signature state.">
-              <LiveSettleState assessment={liveAssessment} settlement={settlementOut} proposal={proposalOut} nft={nftOut} />
+              <LiveSettleState assessment={liveAssessment} settlement={settlementOut} proposal={proposalOut} nft={nftOut} nftAttestation={nftAttestation} />
             </LiveStep>
             <LiveStep step={9} label="End to end" title="The live Hedera artifacts and forensic vault close the audit trail.">
               <div className="flex flex-col gap-3">
-                <LiveArtifactsRecap proposal={proposalOut} />
-                <LiveGovernanceVault assessment={liveAssessment} rawAssessment={adjudicationOut} settlement={settlementOut} proposal={proposalOut} nft={nftOut} stream={stream} />
+                <LiveArtifactsRecap proposal={proposalOut} nftAttestation={nftAttestation} />
+                <LiveGovernanceVault assessment={liveAssessment} rawAssessment={adjudicationOut} settlement={settlementOut} proposal={proposalOut} nft={nftOut} nftAttestation={nftAttestation} stream={stream} />
               </div>
             </LiveStep>
           </>
