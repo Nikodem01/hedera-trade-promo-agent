@@ -432,7 +432,7 @@ function LivePrivatePublicSplit({ assessment }: { assessment: ReturnType<typeof 
         <div className="px-5 py-4 flex flex-col gap-2.5">
           <Field label="Live salted Merkle root" value={provenance?.commitment ? truncMid(provenance.commitment, 14, 10) : "computing"} title={provenance?.commitment} />
           <Field label="Live image fingerprint" value={provenance?.image_fp ? truncMid(provenance.image_fp, 14, 10) : "keyed hash"} title={provenance?.image_fp} />
-          <Field label="HCS sequence" value={anchor?.sequenceNumber ? `#${anchor.sequenceNumber}` : "Mirror Node propagation pending"} />
+          <Field label="HCS sequence" value={anchor?.sequenceNumber ? `#${anchor.sequenceNumber}` : "Waiting for live HCS sequence..."} />
           <a href={HASHSCAN.hcsAudit} target="_blank" rel="noreferrer" className="self-start mt-1 mono text-[11px] flex items-center gap-1.5" style={{ color: "var(--emerald)" }}>
             view topic {HASHSCAN.hcsAuditId} on HashScan <ExternalIcon size={11} />
           </a>
@@ -447,6 +447,7 @@ type LiveVerifyState = {
   seq: number | null;
   consensusTs: string | null;
   error: string | null;
+  checking: boolean;
 };
 
 function formatMirrorTs(ts: string): string {
@@ -458,7 +459,7 @@ function formatMirrorTs(ts: string): string {
 function LiveVerifyReplay({ assessment }: { assessment: ReturnType<typeof liveToolOutput> }) {
   const provenance = assessment?.provenance && typeof assessment.provenance === "object" ? assessment.provenance as LiveProvenance : null;
   const anchor = assessment?.anchor && typeof assessment.anchor === "object" ? assessment.anchor as LiveAnchor : null;
-  const [state, setState] = useState<LiveVerifyState>({ disclosure: null, seq: anchor?.sequenceNumber ?? null, consensusTs: null, error: null });
+  const [state, setState] = useState<LiveVerifyState>({ disclosure: null, seq: anchor?.sequenceNumber ?? null, consensusTs: null, error: null, checking: false });
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -466,31 +467,43 @@ function LiveVerifyReplay({ assessment }: { assessment: ReturnType<typeof liveTo
     const commitment = provenance?.commitment;
     if (!commitment) return;
     (async () => {
-      try {
-        const dRes = await fetch("/api/demo/disclose", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ commitment }),
-        });
-        const disclosure = await dRes.json();
-        if (!dRes.ok) throw new Error(disclosure.error || "disclosure unavailable");
-        const vRes = await fetch("/api/verify", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(disclosure),
-        });
-        const verified = await vRes.json();
-        if (!alive) return;
-        setState({
-          disclosure,
-          seq: verified.onChain?.sequenceNumber ?? anchor?.sequenceNumber ?? null,
-          consensusTs: verified.onChain?.consensusTimestamp ? formatMirrorTs(verified.onChain.consensusTimestamp) : null,
-          error: null,
-        });
-      } catch (e) {
-        if (!alive) return;
-        setState((s) => ({ ...s, error: e instanceof Error ? e.message : "verification unavailable" }));
+      for (let attempt = 0; attempt < 18 && alive; attempt++) {
+        try {
+          setState((s) => ({ ...s, checking: true, error: null, seq: s.seq ?? anchor?.sequenceNumber ?? null }));
+          const dRes = await fetch("/api/demo/disclose", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ commitment }),
+          });
+          const disclosure = await dRes.json();
+          if (!dRes.ok) throw new Error(disclosure.error || "disclosure unavailable");
+          const vRes = await fetch("/api/verify", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(disclosure),
+          });
+          const verified = await vRes.json();
+          if (!alive) return;
+          const consensusTs = verified.onChain?.consensusTimestamp ? formatMirrorTs(verified.onChain.consensusTimestamp) : null;
+          setState({
+            disclosure,
+            seq: verified.onChain?.sequenceNumber ?? anchor?.sequenceNumber ?? null,
+            consensusTs,
+            error: null,
+            checking: !consensusTs,
+          });
+          if (consensusTs) return;
+        } catch (e) {
+          if (!alive) return;
+          setState((s) => ({
+            ...s,
+            error: attempt >= 17 ? (e instanceof Error ? e.message : "verification unavailable") : null,
+            checking: attempt < 17,
+          }));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2500));
       }
+      if (alive) setState((s) => ({ ...s, checking: false }));
     })();
     return () => { alive = false; };
   }, [provenance?.commitment, anchor?.sequenceNumber]);
@@ -503,7 +516,7 @@ function LiveVerifyReplay({ assessment }: { assessment: ReturnType<typeof liveTo
     return <div className="rounded-[5px] p-4 mono text-[11px]" style={{ background: "var(--paper)", color: "var(--ink-faint)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>Waiting for the live adjudication commitment…</div>;
   }
   if (state.error) {
-    return <div ref={ref} className="rounded-[5px] p-4 text-[12px]" style={{ background: "var(--amber-bg)", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>Live disclosure is still propagating: {state.error}</div>;
+    return <div ref={ref} className="rounded-[5px] p-4 text-[12px]" style={{ background: "var(--amber-bg)", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>Live disclosure is still indexing on Mirror Node: {state.error}</div>;
   }
   if (!state.disclosure) {
     return <div ref={ref} className="rounded-[5px] p-4 mono text-[11px]" style={{ background: "var(--paper)", color: "var(--blue)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}><Spinner size={12} /> preparing selective disclosure proof…</div>;
@@ -515,7 +528,7 @@ function LiveVerifyReplay({ assessment }: { assessment: ReturnType<typeof liveTo
         claim={{
           disclosure: state.disclosure,
           seq: state.seq ?? anchor?.sequenceNumber ?? 0,
-          consensusTs: state.consensusTs ?? "Mirror Node propagation pending",
+          consensusTs: state.consensusTs ?? (state.checking ? "Waiting for Mirror Node consensus timestamp..." : "HCS sequence anchored; timestamp still indexing"),
         } as FeaturedClaim}
       />
     </div>
@@ -961,6 +974,7 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
   const [rows, setRows] = useState<ComputedRow[] | null>(null);
   const [live, setLive] = useState<"idle" | "loading" | "ok" | "soft">("idle");
   const [seq, setSeq] = useState<number | null>(null);
+  const [consensusTs, setConsensusTs] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -992,6 +1006,7 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
       const j = await res.json();
       if (res.ok && j.onChain?.sequenceNumber != null && j.allFieldsOk) {
         setSeq(j.onChain.sequenceNumber);
+        setConsensusTs(j.onChain.consensusTimestamp ? formatMirrorTs(j.onChain.consensusTimestamp) : null);
         setLive("ok");
       } else {
         setLive("soft");
@@ -1004,6 +1019,7 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
   const allOk = !!rows && rows.length > 0 && rows.every((r) => r.ok);
   const computedRoot = rows && rows.length > 0 ? rows[0].rootHex : claim.disclosure.commitment;
   const seqShown = seq ?? claim.seq;
+  const consensusShown = consensusTs ?? claim.consensusTs;
 
   return (
     <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px rgba(11,93,59,0.22)" }}>
@@ -1079,7 +1095,7 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
             <Field label="Salted Merkle root (anchored)" value={claim.disclosure.commitment} title={claim.disclosure.commitment} />
             <div className="grid grid-cols-2 gap-3">
               <Field label="HCS sequence" value={`#${seqShown}`} />
-              <Field label="Consensus timestamp" value={claim.consensusTs} />
+              <Field label="Consensus timestamp" value={consensusShown} />
             </div>
             <div className="flex items-center gap-3 flex-wrap mt-1">
               <a href={HASHSCAN.hcsAudit} target="_blank" rel="noreferrer" className="mono text-[11px] flex items-center gap-1.5" style={{ color: "var(--emerald)" }}>
