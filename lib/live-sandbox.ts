@@ -5,7 +5,7 @@ export const LIVE_SANDBOX = {
   retailer: "Retailer_W",
   promotion: "Brand_O floor display",
   maxHbar: 30,
-  imageRef: "oreo.jpg",
+  imageRef: "image_b347ff.jpg",
   narrative:
     "Freestanding OREO display tower installed beside the dairy case for all of May, with the branded OREO header card and well over four facings across the unit, fully stocked. Photo attached.",
   contractText: `TRADE PROMOTION AGREEMENT — BRANDED FLOOR DISPLAY

@@ -1,8 +1,8 @@
 "use client";
 // Model Risk & Quality view — the evidence a financial-services buyer diligences before
 // trusting AI to move money (OCC-style MRM): validation, independent review, live
-// monitoring, explainability, model lineage. Computed off-chain from the sealed decision
-// dossiers (/api/quality) + the labeled pilot validation report (docs/validation).
+// monitoring, explainability, model lineage. Computed off-chain from sealed decision
+// dossiers plus optional pilot-validation data exposed by /api/quality.
 import { useCallback, useEffect, useState } from "react";
 import { DecisionBadge } from "./primitives";
 import type { ComplianceAssessmentType } from "@/lib/plugins/tpp-evaluator/schemas";
@@ -48,7 +48,7 @@ export function ModelRisk({ refreshKey }: { refreshKey?: number }) {
       <section className="max-w-[1100px] w-full mx-auto px-6 md:px-8 pt-6 pb-4">
         <div className="rounded-[5px] py-12 px-6 text-center" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
           <div className="text-[14px] font-semibold mb-1">Model risk &amp; quality</div>
-          <div className="text-[12.5px] max-w-[460px] mx-auto" style={{ color: "var(--ink-mute)" }}>Adjudicate a claim to populate live model-risk evidence — reviewer concurrence, citation integrity, safety-gate holds, and model lineage. Run the validation harness (docs/validation) for labeled accuracy.</div>
+          <div className="text-[12.5px] max-w-[460px] mx-auto" style={{ color: "var(--ink-mute)" }}>Adjudicate a claim to populate live model-risk evidence — reviewer concurrence, citation integrity, safety-gate holds, and model lineage.</div>
         </div>
       </section>
     );

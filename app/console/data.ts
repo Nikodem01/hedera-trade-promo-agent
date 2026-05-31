@@ -174,7 +174,7 @@ export const FEATURED: FeaturedClaim = {
   submittedBy: "Analyst_R (retail execution)",
   contractText: FEATURED_CONTRACT,
   narrative: "Cadbury Easter FSDU placed in a front-of-store actionway with full Easter signage and a prominent Creme Egg presentation. The display ran across the Easter selling period. Requesting settlement of the co-op marketing fee.",
-  imageRef: "Cadbury-Woolworths-Easter-POS-Unit_1.jpg",
+  imageRef: "image_a4d2fe.jpg",
   assessment: {
     decision: "request_more_evidence",
     confidence: 0.95,

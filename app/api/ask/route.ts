@@ -1,6 +1,6 @@
 // Conversational audit: answer a natural-language question over the (confidential,
-// off-chain) decision portfolio — "show every Walmart claim we rejected for a missing
-// date this quarter and the $ withheld". Uses ONLY the structured records; never the
+// off-chain) decision portfolio — "show every retailer claim we rejected for a missing
+// date this quarter and the value withheld". Uses ONLY the structured records; never the
 // chain (the chain holds no business data).
 import { generateText } from "ai";
 import { orchestratorModel } from "@/lib/agent/model";

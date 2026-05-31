@@ -2,9 +2,7 @@
 // copy is unit-testable and decoupled — it maps a workflow PHASE + the real decision
 // to plain-language copy, and works on ANY claim (the featured capture today, a fresh
 // contract + photo tomorrow). Copy is workflow-first by design: lead with what the
-// agent did and why it matters to the business; the mechanism is a short aside, never
-// a lecture. (Founder steer: "a real enterprise workflow," not "a course on Merkle
-// trees.")
+// agent did and why it matters to the business; the mechanism is a short aside.
 import type { ComplianceAssessmentType } from "@/lib/plugins/tpp-evaluator/schemas";
 
 export type Phase =

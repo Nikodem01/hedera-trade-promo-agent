@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Raw demo proof photos are hosted with the deployed demo but intentionally not
+# published in the GitHub repo.
+public/proofs/*
+!public/proofs/.gitkeep

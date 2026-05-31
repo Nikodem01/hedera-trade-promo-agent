@@ -1,12 +1,11 @@
 # Positioning — why not a database, why not an incumbent
 
 ## The category is real
-Trade-promotion / deduction management is an established, consolidating enterprise category. Vividly
-(which absorbed Cresicor) leads it, selling on hard outcomes — large reductions in deduction-processing
-labor, managed dispute services with quantified win rates, named recoveries. Blacksmith was acquired by
-TELUS (~$275M). So: buyers exist, they pay, and they buy on **quantified outcomes** — recovery $,
-dispute-win-rate, labor saved, cycle-time. PromoProof speaks that language (see the operator portfolio:
-leakage recovered, deductions caught).
+Trade-promotion / deduction management is an established, consolidating enterprise category. Existing
+vendors sell on hard outcomes: reductions in deduction-processing labor, managed dispute services with
+quantified win rates, named recoveries, cycle-time reduction, and leakage recovery. So: buyers exist,
+they pay, and they buy on **quantified outcomes** — recovery $, dispute-win-rate, labor saved,
+cycle-time. PromoProof speaks that language while adding a neutral cryptographic trust layer.
 
 ## What the incumbents do well
 Claim/deduction **matching**, workflow, backup-document retrieval, and white-glove dispute **services**.

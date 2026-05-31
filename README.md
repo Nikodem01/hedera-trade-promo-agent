@@ -1,172 +1,96 @@
-# PromoProof — confidential, verifiable trade-promotion settlement on Hedera
+# PromoProof
 
-> An enterprise adjudication agent that reads a bespoke trade-promotion contract, judges a
-> retailer's in-store proof photo against it, **negotiates when the evidence is borderline**, and
-> settles the payment on Hedera — **with zero confidential data on-chain**. Every decision is
-> committed to a public ledger as a tamper-proof, timestamped proof; the terms, amounts, parties and
-> the model's reasoning stay off-chain and are revealed only by **selective disclosure**. Settlement
-> is a **stablecoin transfer that executes only when the brand and the retailer both sign on-chain**.
+PromoProof is a hackathon prototype of an enterprise trade-promotion adjudication agent built for the
+Hedera AI Agent Bounties Week 2 challenge.
 
-Built for the **Hedera AI Bounty — Week 2 (Enterprise Agent + Plugin)** on the
-[Hedera Agent Kit](https://github.com/hashgraph/hedera-agent-kit-js) v4.
+The agent reads a bespoke promotion contract, evaluates an in-store proof photo and retailer narrative,
+asks for missing evidence when needed, and proposes a capped settlement on Hedera testnet. Confidential
+business data stays off-chain; Hedera receives proof-only commitments and settlement artifacts.
 
-**▶ Live:** https://promoproof.liftbyai.com (cached anchor + rate-limited live sandbox) ·
-**On-chain (testnet):** [HCS topic](https://hashscan.io/testnet/topic/0.0.9104996) · [attestation NFT](https://hashscan.io/testnet/token/0.0.9088330) · [pUSDC](https://hashscan.io/testnet/token/0.0.9089483) ·
-**Agent-payments standard:** [AP2-aligned payment mandate](docs/AP2.md), backed by Hedera consensus.
+Live demo: https://promoproof.liftbyai.com
 
-## The problem
+Feedback issue: https://github.com/hashgraph/hedera-agent-kit-js/issues/880
 
-CPG brands pay retailers ~$30B/year in trade promotions — slotting fees, end-cap rentals, co-op
-displays. Proof-of-performance is audited **by hand** against bespoke per-retailer contracts
-(Walmart's terms ≠ Target's ≠ 7-Eleven's). Settlement lags 60–120 days, and **deductions disputes are
-endemic**: industry sources put invalid deductions at **5–10% of trade claims**, with up to **half of
-post-audit deductions erroneous or duplicate** — and they resurface **years later**, demanding durable,
-tamper-proof proof-of-performance that neither side can alter.
+## What The Demo Shows
 
-## What it does
+PromoProof demonstrates a real enterprise workflow in prototype form:
 
-A claim = a bespoke contract (prose) + a proof photo + the retailer's narrative. PromoProof:
+1. A retailer claim is prepared with a contract, photo, and narrative.
+2. The agent adjudicates the claim with multimodal reasoning and clause-level evidence.
+3. The UI shows visual grounding boxes and a criteria matrix.
+4. The decision provenance is sealed off-chain as a salted Merkle dossier.
+5. A proof-only commitment is anchored to Hedera Consensus Service.
+6. Selected fields, including the reasoning summary, can be proven later against the public HCS record.
+7. For approved claims, the agent proposes a pUSDC scheduled transfer.
+8. Funds remain human-controlled: settlement requires both brand and retailer signatures on-chain.
+9. A proof-only NFT attestation is minted with the decision commitment as metadata.
 
-1. **Adjudicates** — a vision model reads the contract, examines the photo, weighs the narrative, and
-   returns a typed, **clause-cited** assessment with one of five decisions.
-2. **Negotiates** — when proof is borderline it asks for the *specific* missing evidence (e.g. a POS
-   timestamp), then re-adjudicates and **revises**.
-3. **Commits — confidentially** — the full decision provenance (inputs, model, settings, reasoning,
-   per-criterion findings) is captured **off-chain**; only a **salted Merkle commitment** + a keyed
-   image fingerprint are anchored to a Hedera HCS topic. No business data ever touches the chain.
-4. **Settles — by mutual consent** — for an approved claim the agent *proposes* a `pUSDC` (stablecoin)
-   transfer as a **Hedera Scheduled Transaction**. It executes **only** once the **brand approver**
-   (authorize) and the **retailer** (accept, via receiver-signature-required) both sign on-chain. A
-   unique **attestation NFT** (metadata = the commitment) is minted on execution.
+The public demo includes a stable verified run plus a rate-limited live sandbox. The verified run keeps
+the complete workflow visible even if free-tier LLM quota or Mirror Node timing slows the live path.
 
-| Decision | Meaning | Effect |
+## Hedera Agent Kit Integration
+
+PromoProof uses the Hedera Agent Kit in TypeScript:
+
+- `@hashgraph/hedera-agent-kit`
+- `@hashgraph/hedera-agent-kit-ai-sdk`
+- `@hiero-ledger/sdk`
+
+It includes a custom Agent Kit plugin at [`lib/plugins/tpp-evaluator`](lib/plugins/tpp-evaluator):
+
+- `adjudicate_claim` - performs multimodal contract/photo/narrative review, returns a typed compliance assessment, builds the off-chain dossier, and anchors proof-only commitment data.
+- `compute_settlement` - deterministic settlement calculation with contract and global payout caps.
+- `propose_settlement` - creates a Hedera Scheduled Transaction for a pUSDC testnet settlement.
+
+The live sandbox also invokes non-query Hedera Agent Kit tools during execution:
+
+- `submit_topic_message_tool` for HCS proof anchoring.
+- `mint_non_fungible_token_tool` for a proof-only NFT attestation.
+
+The agent has no tool that can unilaterally release funds. It can propose settlement, but value moves
+only if both required parties sign the scheduled transaction on-chain.
+
+## Hedera Testnet Artifacts
+
+| Artifact | Purpose | Link |
 |---|---|---|
-| `approve` | Fully compliant | commit + propose full settlement |
-| `partial_credit` | Partially compliant | commit + propose proportional settlement |
-| `reject` | Non-compliant | commit only (neutral record) |
-| `request_more_evidence` | Borderline | ask for specific proof; re-adjudicate |
-| `escalate_human` | Too uncertain | route to a human reviewer |
+| HCS topic `0.0.9104996` | Proof-only audit commitments | https://hashscan.io/testnet/topic/0.0.9104996 |
+| NFT collection `0.0.9088330` | Per-run attestation NFT collection | https://hashscan.io/testnet/token/0.0.9088330 |
+| pUSDC token `0.0.9089483` | Demo settlement token | https://hashscan.io/testnet/token/0.0.9089483 |
+| Brand treasury `0.0.9089484` | Demo payer account | https://hashscan.io/testnet/account/0.0.9089484 |
+| Retailer account `0.0.9089486` | Demo payee account | https://hashscan.io/testnet/account/0.0.9089486 |
 
-## Trustworthy-AI layer (auditable judgement)
+## Privacy Model
 
-Trust on *both* sides of the ledger — the settlement is trustless, and the AI judgement is made
-visible, fraud-resistant, governed, and ROI-tied:
+The prototype follows a commitments-on-chain, data-off-chain pattern:
 
-- **Visual grounding — "show me where".** The model returns a bounding box per criterion; the verdict
-  overlays them on the proof photo (hover a finding → its box highlights). Judgement you can *see*.
-- **Evidence authenticity.** Objective **EXIF** capture-time/GPS corroboration + a soft visual
-  manipulation signal; cross-claim **proof-reuse** is caught on-chain via the keyed image fingerprint
-  (GenAI fraud is projected at $40B by 2027).
-- **Human oversight on the record.** An analyst can overturn the AI; the override is anchored to HCS as
-  its own proof-only commitment linked to the original — tamper-proof oversight evidence (EU AI Act
-  Art. 14), itself selectively disclosable.
-- **Leakage recovered.** The portfolio quantifies $ withheld vs naively paying every claim in full —
-  the ROI of catching the 5–10% of invalid deductions.
+- Full contracts, photos, amounts, parties, and reasoning live off-chain.
+- HCS receives salted Merkle roots, keyed image fingerprints, timestamps, and transaction metadata.
+- Selective disclosure proves one field without revealing the whole dossier.
+- NFT metadata contains only the decision commitment, not confidential claim text.
 
-## The on-chain trade-promotion fund (accrual → release → refund)
+This is a technical prototype for hackathon demonstration, not a production claims platform. `pUSDC` is
+a self-minted testnet demo token, not real USDC. The proof photos used by the hosted demo are functional
+placeholders for computer-vision testing and are not included in the public repository.
 
-Trade spend is **accrued** up front and drawn down on validated proof. PromoProof models this on
-Hedera: the brand pre-funds a pUSDC **accrual escrow**; each mutually-consented settlement releases
-from it (a **HIP-423 long-term scheduled transfer** — a ~60-day approval window that still executes the
-instant both parties sign); unspent accrual refunds to the brand at the window's end. The console shows
-the fund drawing down live.
-
-## Why Hedera — and why a database can't do this
-
-The hard questions for any "blockchain" product are *confidentiality* and *necessity*. PromoProof
-answers both with the enterprise-standard **Baseline pattern** (EY/ConsenSys/Microsoft) and EDPB
-blockchain guidance: **commitments on-chain, business data off-chain.**
-
-- **Confidential by construction.** The public HCS record is *only* `{commitment, image_fp, ts}` — a
-  salted Merkle root and a keyed fingerprint. Bespoke terms, settlement economics, retailer identity
-  and the model's reasoning are never published. (Per-leaf salts mean disclosing one field can't
-  unmask another.)
-- **Tamper-proof, mutual, non-repudiable.** A database record of "we decided X at time T" is only as
-  trustworthy as whoever hosts it — they can alter or backdate it. A commitment on a neutral public
-  consensus ledger can't be forged or backdated, and the brand, the retailer, **and an auditor** can
-  each verify it **without trusting our server** — exactly what a deductions dispute (surfacing years
-  later) needs.
-- **Selective disclosure.** Reveal one field — the decision, or a single clause finding — with its
-  Merkle proof; the counterparty verifies it against the on-chain commitment and learns nothing else.
-- **Consensus-enforced consent.** Settlement is a scheduled transfer that **physically cannot execute**
-  without both parties' signatures. The agent (and any single key) is incapable of moving the funds —
-  the bounty's "impossible to drain without explicit consent" rule satisfied by Hedera consensus, not
-  by app logic.
-- **Right-fit primitives, low fixed fees.** HCS is a decentralized notary; Scheduled Transactions +
-  receiver-signature-required encode a mutual agreement; sub-cent fees suit millions of anchors.
-
-## The custom plugin
-
-[`lib/plugins/tpp-evaluator`](lib/plugins/tpp-evaluator) — a Hedera Agent Kit v4 plugin with three
-tools: `adjudicate_claim` (multimodal judgement → builds the off-chain dossier and anchors the
-proof-only commitment in code), `compute_settlement` (deterministic, hard-capped), and
-`propose_settlement` (creates the scheduled, two-signature pUSDC settlement). The model has **no tool
-that moves funds.**
-
-## Model — provider-swappable
-
-Runs on **Gemini 3.x (free tier)** by default (`LLM_PROVIDER=google`); flip to `anthropic` (Sonnet
-orchestration + Opus vision) with one env var. The thesis is **model-agnostic, verifiable
-adjudication** — the on-chain proof is what's load-bearing, not any single vendor.
-
-## Hedera footprint (testnet)
-
-| Primitive | Why | Artifact |
-|---|---|---|
-| HCS | Neutral, immutable **commitment** ledger (proof-only) | topic [`0.0.9104996`](https://hashscan.io/testnet/topic/0.0.9104996) |
-| HTS (fungible) | `pUSDC` stablecoin settlement unit (prod: Circle USDC) | token [`0.0.9089483`](https://hashscan.io/testnet/token/0.0.9089483) |
-| HTS (NFT) | Unique per-settlement attestation (metadata = commitment) | token [`0.0.9088330`](https://hashscan.io/testnet/token/0.0.9088330) |
-| Scheduled tx + receiver-sig | Mutual-consent settlement (brand + retailer co-sign) | brand `0.0.9089484` → retailer `0.0.9089486` |
-
-## Tech stack
-
-Next.js 16 (App Router) · React 19 · TypeScript (strict) · Tailwind 4 ·
-`@hashgraph/hedera-agent-kit` v4 + `@hashgraph/hedera-agent-kit-ai-sdk` · `@hiero-ledger/sdk` ·
-Vercel AI SDK v6 · Zod 3 · Vitest.
-
-## Run it
+## Local Development
 
 ```bash
 pnpm install
-cp .env.example .env.local                                  # fill HEDERA_* + an LLM key
-node --env-file=.env.local scripts/setup-hedera.mjs         # HCS topic + receipt tokens
-node --env-file=.env.local scripts/setup-settlement.mjs     # pUSDC + brand/retailer accounts
-pnpm dev                                                    # http://localhost:3000
-pnpm test                                                   # crypto, settlement, no-drain
+cp .env.example .env.local
+node --env-file=.env.local scripts/setup-hedera.mjs
+node --env-file=.env.local scripts/setup-settlement.mjs
+pnpm dev
+pnpm test
 ```
 
-Dev drivers: `scripts/eval-decisions.mjs` (ledger-asserted decision eval), `scripts/test-v2-flow.mjs`
-(adjudicate → propose → brand+retailer sign → executed), `scripts/test-scheduled-settlement.mjs`.
+The app builds without bundled proof photos. To run the exact local visual demo, provide your own images
+under `public/proofs/` using the filenames referenced by the prepared scenarios, or use uploaded image
+references through the app.
 
-## Security / no-drain
+## Submission Links
 
-The model never moves money and has **no tool that can**. `compute_settlement` caps the figure;
-`propose_settlement` re-caps and only *schedules*; execution requires the brand approver's **and** the
-retailer's on-chain signatures. The recipient is a fixed registered account, never model-chosen. See
-[`tests/injection.test.ts`](tests/injection.test.ts) and [`tests/dossier.test.ts`](tests/dossier.test.ts).
-Operator/party keys are server-only.
-
-## Enterprise readiness
-
-PromoProof adjudicates payouts, so it is engineered to the diligence a CPG trade-finance buyer
-actually runs — model risk, data governance, and provable trust, not just a demo:
-
-- **Model risk ([docs/MODEL_RISK.md](docs/MODEL_RISK.md)).** An OCC-style posture: a dual-model
-  adjudicator + **independent reviewer**, a **deterministic safety gate** (low-confidence or
-  reviewer-flagged decisions auto-escalate to a human — withhold-only, never approve), a labeled
-  **validation harness** with an on-chain ground truth (`docs/validation/`), and a live **Model Risk &
-  Quality** panel (`/api/quality`: reviewer-concurrence, citation-integrity, safety-gate holds, model
-  lineage).
-- **Data governance ([docs/COMPLIANCE.md](docs/COMPLIANCE.md), [docs/SECURITY.md](docs/SECURITY.md)).**
-  Dossiers **encrypted at rest** (AES-256-GCM); a **provable, HCS-anchored access log** (a hosted DB
-  log is editable — this isn't); **crypto-shredding** deletion (EU AI Act / GDPR-aligned); the no-drain
-  invariant and threat model written down.
-- **Positioning ([docs/COMPETITIVE.md](docs/COMPETITIVE.md)).** Why a neutral consensus ledger beats a
-  database, and why the trust layer is the one column an incumbent deduction-management suite can't fill.
-
-## Roadmap
-
-Batched (Merkle-rolled) commitments for scale + timing privacy; production stablecoin (Circle USDC /
-Stablecoin Studio) and anchor-only settlement for amount-confidentiality; replicated/persistent dossier
-store (at-rest encryption is in place — see SECURITY.md); third-party attestations (SOC 2 / ISO 42001);
-ERP/TPM integration.
+- Live demo: https://promoproof.liftbyai.com
+- Public repository: https://github.com/Nikodem01/hedera-trade-promo-agent
+- Hedera Agent Kit feedback: https://github.com/hashgraph/hedera-agent-kit-js/issues/880
+- Submission copy: [`docs/SUBMISSION.md`](docs/SUBMISSION.md)

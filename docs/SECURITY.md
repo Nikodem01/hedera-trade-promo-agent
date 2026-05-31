@@ -32,7 +32,7 @@ This is verified by `tests/injection.test.ts` (adversarial "drain" prompts canno
 | Proof-of-performance fraud (photo reuse) | Keyed image fingerprint anchored on-chain; cross-claim reuse is detectable without re-identifying the image |
 | Model hallucination / unsupported decision | Independent second-model review + safety gate; citation verification |
 | Right-to-erasure vs immutability | Crypto-shredding: delete the off-chain salted data → the on-chain commitment is permanently opaque |
-| Public-internet exposure / API abuse | Reverse proxy (TLS, rate-limit, size cap) + per-route guards (`lib/guard.ts`) enforced IN handlers, not middleware (CVE-2025-29927); in `PUBLIC_READONLY` mode anonymous callers get the cached demo, public verification, and a tightly rate-limited live sandbox, while privileged routes need the operator token; same-origin (CSRF) check + in-memory rate limit; `import 'server-only'` keeps key modules off the client bundle. See `docs/DEPLOY.md`. |
+| Public-internet exposure / API abuse | Reverse proxy (TLS, rate-limit, size cap) + per-route guards (`lib/guard.ts`) enforced IN handlers, not middleware (CVE-2025-29927); in `PUBLIC_READONLY` mode anonymous callers get the cached demo, public verification, and a tightly rate-limited live sandbox, while privileged routes need the operator token; same-origin (CSRF) check + in-memory rate limit; `import 'server-only'` keeps key modules off the client bundle. |
 
 ## Key management
 Operator and party keys are server-only (`lib/hedera/client.ts`). `DOSSIER_ENC_KEY` derives the at-rest
@@ -49,9 +49,8 @@ AES key via scrypt with a fixed app salt (deterministic so files stay readable a
   access is gated by a single shared **operator token** (`PUBLIC_READONLY` mode + `lib/guard.ts`) and the
   reverse proxy — anonymous visitors get the cached anchor + limited live sandbox, never privileged keys.
 
-## Public deployment
-Hosting is hardened per `docs/DEPLOY.md`: a dedicated low-balance testnet operator account (blast-radius
-limiting), nginx TLS + rate limit + size cap (and an optional whole-site password), `ufw` + SSH
-hardening, a non-root `systemd` service, a `chmod 600` env file, security headers (`next.config.ts`),
-and Next kept patched. The exposure model: **public = cached anchor + limited live sandbox; privileged
-and fund-touching actions = gated.**
+## Public deployment posture
+The hosted demo runs with a dedicated low-balance testnet operator account, TLS, rate limits, security
+headers (`next.config.ts`), server-only environment keys, and privileged routes gated in application
+handlers. The exposure model is: **public = cached anchor + limited live sandbox; privileged and
+fund-touching actions = gated.**

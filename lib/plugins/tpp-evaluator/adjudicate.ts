@@ -33,7 +33,7 @@ const adjudicateParameters = (_context: Context = {}) =>
     image_ref: z
       .string()
       .describe(
-        "The proof photo: a built-in filename (e.g. 'oreo.jpg'), an https URL, or a retailer-uploaded reference of the form 'upload:<id>' supplied as additional evidence in a follow-up turn.",
+        "The proof photo: a built-in filename (e.g. 'image_b347ff.jpg'), an https URL, or a retailer-uploaded reference of the form 'upload:<id>' supplied as additional evidence in a follow-up turn.",
       ),
     narrative: z
       .string()

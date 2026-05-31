@@ -183,7 +183,7 @@ function ClaimPickerLive({ scenarios, active, busy, onSelect, onImport }: { scen
       </div>
       {importing && (
         <div className="mb-3 rounded-[4px] p-3" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-          <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={4} placeholder={'{"retailer":"Kroger #55","promo":"Q3 endcap","imageRef":"oreo.jpg","narrative":"...","contractText":"§1.1 ..."}'} className="field-bare w-full text-[12px] mono p-2 rounded-[3px]" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }} />
+          <textarea value={raw} onChange={(e) => setRaw(e.target.value)} rows={4} placeholder={'{"retailer":"Retailer_W #55","promo":"Q3 display","imageRef":"image_b347ff.jpg","narrative":"...","contractText":"§1.1 ..."}'} className="field-bare w-full text-[12px] mono p-2 rounded-[3px]" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }} />
           <div className="flex items-center gap-2 mt-2">
             <button onClick={doImport} className="mono text-[10.5px] uppercase tracking-[0.14em] px-3 py-1.5 rounded-[3px]" style={{ background: "var(--ink)", color: "white", cursor: "pointer" }}>Add to queue</button>
             <span className="mono text-[10px]" style={{ color: "var(--ink-faint)" }}>paste a promotion JSON (imageRef = a built-in proof filename or https URL)</span>

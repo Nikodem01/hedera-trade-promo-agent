@@ -3,8 +3,8 @@ import { google } from "@ai-sdk/google";
 
 /**
  * Provider switch. Set LLM_PROVIDER=google to develop/verify on Gemini's free
- * tier; leave it unset (or =anthropic) for the production thesis — Sonnet 4.6
- * orchestration + Opus 4.7 multimodal adjudication (CLAUDE.md §7). Model ids are
+ * tier; leave it unset (or =anthropic) for the production thesis — Sonnet
+ * orchestration + Opus multimodal adjudication. Model ids are
  * overridable per-role via env so swapping is config, not code.
  */
 const PROVIDER = process.env.LLM_PROVIDER ?? "anthropic";

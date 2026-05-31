@@ -18,13 +18,14 @@ PromoProof maps to it. None of this is aspirational — each item points at code
   **model registry** (distinct models × counts) is surfaced at `/api/quality`.
 
 ## 2. Validation
-- **Labeled pilot set** with an **on-chain ground truth**: `scripts/eval-decisions.mjs` drives each
-  curated (contract, photo, expected-decision) case end-to-end and reads the decision back from the
-  HCS ledger (not the response stream), so the score reflects what Hedera recorded. Output:
-  `docs/validation/report.json` (accuracy + confusion matrix).
-- **Honest N.** This is a **pilot** set (N=3 adversarial cases); N is reported as-is, never inflated.
-  The deliverable is a rigorous, reproducible methodology — see the **expansion protocol** in
-  `docs/validation/README.md` (stratify across all five decisions and across retailers/placements).
+- **Pilot validation with an on-chain ground truth.** The quality layer is designed to score curated
+  `(contract, photo, expected-decision)` cases by reading the sealed result back from the HCS audit
+  ledger, not from a transient response stream. That keeps the model-risk story tied to what Hedera
+  actually recorded.
+- **Honest N.** The current validation set is intentionally pilot-scale. The production protocol is to
+  stratify cases across all five decisions (`approve`, `partial_credit`, `reject`,
+  `request_more_evidence`, `escalate_human`) and across retailer formats, then track accuracy and the
+  confusion matrix over releases.
 
 ## 3. Independent review
 A separate model pass audits each primary assessment (`agrees` / material `concern` /

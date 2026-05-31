@@ -1,12 +1,9 @@
 // Model Risk & Quality report — the evidence a financial-services AI buyer diligences
 // (OCC-style model-risk management): validation, independent review, monitoring,
 // explainability, model lineage. Aggregated LIVE from the confidential off-chain
-// dossiers (never the chain). The labeled pilot-validation summary, if the harness has
-// produced one (scripts/eval-decisions.mjs --report), is merged in from disk.
+// dossiers (never the chain).
 import { allDossiers } from "@/lib/dossier-store";
 import type { Dossier } from "@/lib/dossier";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,12 +58,6 @@ export async function GET() {
   const meanConfByDecision: Record<string, number> = {};
   for (const [k, v] of Object.entries(confByDecision)) meanConfByDecision[k] = v.n ? v.sum / v.n : 0;
 
-  // Pilot labeled-validation summary, if the harness has been run and committed.
-  let validation: unknown = null;
-  try {
-    validation = JSON.parse(await readFile(join(process.cwd(), "docs", "validation", "report.json"), "utf-8"));
-  } catch { /* not run yet */ }
-
   return Response.json({
     count: adj.length,
     decision_mix: mix,
@@ -79,6 +70,6 @@ export async function GET() {
     citations_checked: citTotal,
     model_registry: models,
     thinking_settings: thinking,
-    validation,
+    validation: null,
   });
 }

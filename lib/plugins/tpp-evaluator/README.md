@@ -14,7 +14,7 @@ Reads a bespoke promotion contract, examines the proof photo, and weighs the ret
 
 Ambiguity is first-class — poor lighting, wrong angle, or a missing timestamp lead to `indeterminate` criteria, `partial_credit`, or `request_more_evidence`, never a silent approve/reject.
 
-Parameters: `contract_text`, `image_ref` (filename in `examples/proofs/` or an https URL), `narrative`, optional `prior_evidence` (for re-adjudication after an evidence request).
+Parameters: `contract_text`, `image_ref` (filename in `public/proofs/` or an https URL), `narrative`, optional `prior_evidence` (for re-adjudication after an evidence request).
 
 ### `compute_settlement` (deterministic enforcement — no LLM)
 Turns a decision into an HBAR amount. `approve → 100%`, `partial_credit → recommended %`, everything else `→ 0`. The result is hard-capped at both the contract maximum and a global safety ceiling (`SETTLEMENT_HARD_CAP_HBAR`, default 50), so a payout can never be inflated beyond what the contract allows — regardless of the model's recommendation.

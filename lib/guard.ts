@@ -1,7 +1,7 @@
 // Defense-in-depth access gate for mutating / expensive route handlers. Enforced
 // INSIDE each handler — NOT in middleware, which is bypassable (CVE-2025-29927) and is
 // "not a security boundary" per Next's own guidance. The real outer boundary is the
-// reverse proxy (see docs/DEPLOY.md); this is the in-app layer.
+// reverse proxy; this is the in-app layer.
 //
 // Modes:
 //  - PUBLIC_READONLY unset (local dev / operator-only host): everything allowed.
