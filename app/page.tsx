@@ -10,7 +10,7 @@ const CATALOG = [
   {
     id: "01",
     file: "01-oreo-endcap-q2.txt",
-    retailer: "Walmart #2643",
+    retailer: "Retailer_W #2643",
     promo: "Q2 OREO Floor Display",
     imageRef: "oreo.jpg",
     narrative:
@@ -20,7 +20,7 @@ const CATALOG = [
   {
     id: "02",
     file: "02-cadbury-easter-display.txt",
-    retailer: "Woolworths",
+    retailer: "Retailer_W",
     promo: "Cadbury Easter Display",
     imageRef: "Cadbury-Woolworths-Easter-POS-Unit_1.jpg",
     narrative:
@@ -30,7 +30,7 @@ const CATALOG = [
   {
     id: "03",
     file: "03-ritz-checkout-shelf.txt",
-    retailer: "7-Eleven TX-1188",
+    retailer: "Retailer_W TX-1188",
     promo: "RITZ Checkout Feature",
     imageRef: "licensed-image-ritz.jpg",
     narrative:

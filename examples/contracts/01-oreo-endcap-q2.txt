@@ -1,6 +1,6 @@
 TRADE PROMOTION AGREEMENT — BRANDED FLOOR DISPLAY
-Brand: Mondelez International ("Brand")  |  Retailer: Walmart Supercenter #2643 ("Retailer")
-Promotion: Q2 OREO Branded Floor Display  |  Agreement No. WMT-OREO-Q2-2026
+Brand: Brand_M ("Brand")  |  Retailer: Retailer_W #2643 ("Retailer")
+Promotion: Q2 OREO Branded Floor Display  |  Agreement No. RW-OREO-Q2-2026
 
 SECTION 1. TERM
 1.1  The promotional display shall be installed during the Promotion Window of

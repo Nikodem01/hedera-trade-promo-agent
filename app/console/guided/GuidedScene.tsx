@@ -7,45 +7,63 @@ import type { ReactNode } from "react";
 import { ExternalIcon } from "../primitives";
 import type { SceneCopy, Annotation as Ann } from "./narration";
 
-/** The persistent "you are here / what's next" map. Pure indicator (not clickable) so
- * a recording can never desync — there is one obvious way forward (Continue). */
-export function JourneyRail({ labels, current }: { labels: string[]; current: number }) {
+export type RunMode = "verified" | "live";
+
+/** The global run-mode controller — the single switch that drives the whole vertical
+ * timeline. "Verified run" replays the frozen on-chain capture instantly; "Live testnet
+ * sandbox" calls the real LLM + Hedera and streams each Agent Kit call as it happens.
+ * Sticky at the top of the viewport so it stays reachable anywhere in the scroll. */
+export function RunModeBar({ mode, onChange }: { mode: RunMode; onChange: (m: RunMode) => void }) {
+  const Btn = ({ m, label, sub, accent }: { m: RunMode; label: string; sub: string; accent: string }) => {
+    const active = mode === m;
+    return (
+      <button
+        onClick={() => onChange(m)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-[3px]"
+        style={{
+          background: active ? "var(--paper)" : "transparent",
+          boxShadow: active ? "inset 0 0 0 1px var(--keyline-2), 0 1px 2px rgba(0,0,0,0.04)" : "none",
+          cursor: "pointer",
+        }}
+      >
+        <i
+          className={"block w-1.5 h-1.5 rounded-full" + (active && m === "live" ? " pulse-dot" : "")}
+          style={{ background: active ? accent : "var(--ink-faint)" }}
+        />
+        <span className="flex flex-col items-start leading-tight">
+          <span className="mono text-[10.5px] uppercase tracking-[0.12em] font-semibold" style={{ color: active ? "var(--ink)" : "var(--ink-faint)" }}>
+            {label}
+          </span>
+          <span className="mono text-[8.5px] uppercase tracking-[0.12em]" style={{ color: "var(--ink-faint)" }}>{sub}</span>
+        </span>
+      </button>
+    );
+  };
   return (
-    <nav className="max-w-[1100px] mx-auto px-6 md:px-8 w-full pt-5 pb-1">
-      <ol className="flex items-center gap-1.5 flex-wrap">
-        {labels.map((label, i) => {
-          const state = i < current ? "done" : i === current ? "current" : "upcoming";
-          const dot =
-            state === "current"
-              ? { bg: "var(--emerald)", ring: "rgba(11,93,59,0.18)" }
-              : state === "done"
-                ? { bg: "var(--ink-mute)", ring: "var(--keyline-2)" }
-                : { bg: "var(--paper)", ring: "var(--keyline-2)" };
-          return (
-            <li key={i} className="flex items-center gap-1.5">
-              <span className="flex items-center gap-1.5">
-                <i
-                  className={"block w-2 h-2 rounded-full" + (state === "current" ? " pulse-dot" : "")}
-                  style={{ background: dot.bg, boxShadow: `0 0 0 3px var(--paper), 0 0 0 4px ${dot.ring}` }}
-                />
-                <span
-                  className="mono text-[9.5px] uppercase tracking-[0.12em] whitespace-nowrap"
-                  style={{
-                    color: state === "current" ? "var(--ink)" : "var(--ink-faint)",
-                    fontWeight: state === "current" ? 600 : 500,
-                  }}
-                >
-                  {label}
-                </span>
-              </span>
-              {i < labels.length - 1 && (
-                <i className="block w-5 h-px" style={{ background: "var(--keyline-2)" }} />
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
+    <div className="sticky top-0 z-30 hairline-b" style={{ background: "var(--paper-2)", backdropFilter: "blur(6px)" }}>
+      <div className="max-w-[1100px] mx-auto px-6 md:px-8 py-2 flex items-center gap-3 flex-wrap">
+        <span className="mono text-[9.5px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--ink-faint)" }}>View</span>
+        <div className="inline-flex items-center gap-0.5 rounded-[4px] p-0.5" style={{ background: "var(--paper-sunken)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <Btn m="verified" label="Verified run" sub="cached anchor" accent="var(--emerald)" />
+          <Btn m="live" label="Live testnet sandbox" sub="real run" accent="var(--blue)" />
+        </div>
+        <span className="text-[11.5px] leading-snug hidden md:inline max-w-[440px]" style={{ color: "var(--ink-mute)" }}>
+          {mode === "verified"
+            ? "A real end-to-end run, frozen from captured Hedera artifacts — replays instantly."
+            : "Calls the live LLM and Hedera testnet, streaming each Agent Kit call as it runs."}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** A small inline loading spinner for the live run. */
+export function Spinner({ size = 13, color = "var(--blue)" }: { size?: number; color?: string }) {
+  return (
+    <span
+      className="anim-spin inline-block rounded-full align-[-2px]"
+      style={{ width: size, height: size, border: "2px solid var(--keyline-2)", borderTopColor: color }}
+    />
   );
 }
 
@@ -135,72 +153,20 @@ export function SceneFrame({
   );
 }
 
-/** Sticky bottom controls — the single obvious way forward. Mirrors the old composer's
- * placement so the page rhythm is unchanged. Continue becomes Replay on the last scene. */
-export function TourFooter({
-  stepIndex,
-  stepCount,
-  onBack,
-  onContinue,
-  onRestart,
-}: {
-  stepIndex: number;
-  stepCount: number;
-  onBack: () => void;
-  onContinue: () => void;
-  onRestart: () => void;
-}) {
-  const isLast = stepIndex >= stepCount - 1;
-  const isFirst = stepIndex <= 0;
+export function LegalDisclaimer() {
   return (
-    <div className="hairline-t sticky bottom-0 z-10" style={{ background: "var(--paper-2)" }}>
-      <div className="max-w-[1100px] mx-auto px-4 md:px-8 py-3 flex items-center gap-3">
-        <button
-          onClick={onBack}
-          disabled={isFirst}
-          className="mono text-[11px] uppercase tracking-[0.14em] font-medium px-3.5 py-2.5 rounded-[3px]"
-          style={{
-            background: "transparent",
-            color: isFirst ? "var(--ink-faint)" : "var(--ink-mute)",
-            boxShadow: "inset 0 0 0 1px var(--keyline-2)",
-            cursor: isFirst ? "not-allowed" : "pointer",
-            opacity: isFirst ? 0.5 : 1,
-          }}
-        >
-          ← Back
-        </button>
-
-        <div className="flex-1 flex items-center gap-2.5">
-          <div className="flex-1 h-[5px] rounded-full overflow-hidden max-w-[320px]" style={{ background: "var(--paper-sunken)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${((stepIndex + 1) / stepCount) * 100}%`, background: "var(--emerald)", transition: "width .35s cubic-bezier(.2,.7,.2,1)" }}
-            />
-          </div>
-          <span className="mono text-[10px] uppercase tracking-[0.14em] hidden sm:inline" style={{ color: "var(--ink-faint)" }}>
-            {stepIndex + 1} / {stepCount}
-          </span>
-        </div>
-
-        {isLast ? (
-          <button
-            onClick={onRestart}
-            className="mono text-[11px] uppercase tracking-[0.14em] font-semibold px-4 py-2.5 rounded-[3px]"
-            style={{ background: "var(--ink)", color: "var(--paper)", cursor: "pointer" }}
-          >
-            ↺ Replay
-          </button>
-        ) : (
-          <button
-            onClick={onContinue}
-            className="btn-primary mono text-[11px] uppercase tracking-[0.14em] font-semibold px-5 py-2.5 rounded-[3px] inline-flex items-center gap-2"
-            style={{ background: "var(--emerald)", color: "white", boxShadow: "0 6px 18px rgba(11,93,59,0.18), inset 0 -1px 0 rgba(0,0,0,0.18)", cursor: "pointer" }}
-          >
-            Continue
-            <span style={{ opacity: 0.85 }}>→</span>
-          </button>
-        )}
+    <aside className="max-w-[1100px] mx-auto px-6 md:px-8 pb-24 md:pb-20">
+      <div
+        className="rounded-[4px] px-4 py-3 text-[11.5px] leading-[1.55]"
+        style={{ background: "var(--paper-2)", color: "var(--ink-faint)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}
+      >
+        <span className="mono uppercase tracking-[0.14em] font-medium" style={{ color: "var(--ink-mute)" }}>
+          Disclaimer:
+        </span>{" "}
+        This application is a technical prototype built solely for hackathon demonstration purposes. All brand names,
+        logos, and storefront images are utilized as functional placeholders to test computer vision capabilities.
+        This project has no official affiliation with, endorsement from, or partnership with these brands.
       </div>
-    </div>
+    </aside>
   );
 }

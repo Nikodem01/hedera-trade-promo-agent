@@ -3,11 +3,18 @@
 // featured run (real photo, real boxes, real on-chain ids) without invoking the live
 // agent — so the public read-only URL is truthful and bulletproof for recording. The
 // operator/live path reuses the real interactive components instead (see Stage 5).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import {
+  DefaultChatTransport,
+  getToolOrDynamicToolName,
+  isTextUIPart,
+  isToolOrDynamicToolUIPart,
+} from "ai";
 import type { FeaturedClaim } from "../data";
 import { HASHSCAN } from "../data";
 import { DocSeal, ExternalIcon, truncMid } from "../primitives";
-import { ProofLink } from "./GuidedScene";
+import { ProofLink, Spinner } from "./GuidedScene";
 
 const Lbl = ({ children }: { children: React.ReactNode }) => (
   <span className="mono text-[9.5px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--ink-faint)" }}>{children}</span>
@@ -37,7 +44,7 @@ export function FlowDiagram() {
         ))}
       </div>
       <p className="text-[12px] leading-snug mt-4 max-w-[640px]" style={{ color: "var(--ink-faint)" }}>
-        Settlement is in <b style={{ color: "var(--ink-mute)" }}>pUSDC</b>, a USD-pegged stablecoin — the trade dollars. (Hedera&rsquo;s own coin, HBAR, just pays the network&rsquo;s fractions-of-a-cent fees.)
+        This demo has two lanes: a cached anchor from a successful end-to-end run, and a live sandbox that calls the LLM and Hedera testnet when quota is available. Settlement is in <b style={{ color: "var(--ink-mute)" }}>pUSDC</b>, a USD-pegged demo token; HBAR only pays network fees.
       </p>
     </div>
   );
@@ -91,6 +98,225 @@ export function ClaimInputs({ claim }: { claim: FeaturedClaim }) {
         </div>
       )}
     </div>
+  );
+}
+
+function parseJSON(v: unknown): Record<string, unknown> | null {
+  if (v && typeof v === "object") return v as Record<string, unknown>;
+  if (typeof v !== "string") return null;
+  try {
+    return JSON.parse(v) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function toolResult(name: string, out: Record<string, unknown> | null, state?: string): string {
+  if (state === "input-available" || state === "input-streaming") return "running...";
+  if (!out) return state ?? "";
+  if (name === "adjudicate_claim") return `decision: ${out.decision ?? "returned"} · confidence ${out.confidence ?? "n/a"}`;
+  if (name === "submit_topic_message_tool") return `HCS submitted · tx ${typeof out.transactionId === "string" ? truncMid(out.transactionId, 10, 6) : "complete"}`;
+  if (name === "compute_settlement") return `${out.amount_hbar ?? out.amount ?? "0"} pUSDC · ${out.partial_credit_pct ?? 0}%`;
+  if (name === "propose_settlement") return `schedule ${out.scheduleId ?? "created"} · awaiting signatures`;
+  if (name === "mint_non_fungible_token_tool") return "proof-only attestation minted";
+  if (typeof out.humanMessage === "string") return out.humanMessage.split("\n")[0];
+  return JSON.stringify(out).slice(0, 90);
+}
+
+function toolArgs(name: string, input: unknown): string {
+  if (name === "adjudicate_claim") return "prepared contract + proof photo";
+  if (name === "submit_topic_message_tool") return "proof-only commitment";
+  if (name === "mint_non_fungible_token_tool") return "commitment metadata only";
+  if (input == null) return "";
+  const s = typeof input === "string" ? input : JSON.stringify(input);
+  return s.length > 90 ? s.slice(0, 90) + "..." : s;
+}
+
+/** The prepared live-sandbox claim (mirrors /api/demo/live's LIVE_SANDBOX — display only). */
+const LIVE_CLAIM = {
+  retailer: "Retailer_W",
+  promotion: "Brand_O floor display",
+  imageRef: "oreo.jpg",
+  narrative:
+    "Freestanding OREO display tower installed beside the dairy case for all of May, with the branded OREO header card and well over four facings across the unit, fully stocked. Photo attached.",
+};
+
+/** Plain-language "what's happening right now" while each Agent Kit tool runs. */
+const RUNNING_LABEL: Record<string, string> = {
+  adjudicate_claim: "Reading the contract & judging the photo…",
+  compute_settlement: "Computing the capped settlement…",
+  propose_settlement: "Proposing the Scheduled Transaction on Hedera…",
+  submit_topic_message_tool: "Anchoring the proof-only commitment to HCS…",
+  mint_non_fungible_token_tool: "Minting the attestation NFT…",
+};
+
+const LEDGER_TOOLS = new Set([
+  "adjudicate_claim",
+  "compute_settlement",
+  "propose_settlement",
+  "submit_topic_message_tool",
+  "mint_non_fungible_token_tool",
+]);
+
+type LiveToolPart = { state?: string; input?: unknown; output?: unknown; errorText?: string };
+type ToolUIPart = Parameters<typeof getToolOrDynamicToolName>[0];
+
+/** One streamed tool call — a spinner + live "Invoking Hedera Agent Kit…" line while it
+ * runs, resolving to a checked result row when the output lands. */
+function LiveToolRow({ part }: { part: ToolUIPart }) {
+  const name = getToolOrDynamicToolName(part);
+  const tp = part as LiveToolPart;
+  const running = tp.state === "input-streaming" || tp.state === "input-available";
+  const errored = tp.state === "output-error";
+  const out = parseJSON(tp.output);
+  return (
+    <div className="anim-stream-in grid grid-cols-[18px_1fr] gap-3">
+      <div className="pt-0.5">
+        {running ? (
+          <Spinner size={13} />
+        ) : (
+          <i
+            className="block w-2.5 h-2.5 rounded-full mt-1"
+            style={{ background: errored ? "var(--red)" : "var(--emerald)", boxShadow: `0 0 0 3px var(--paper), 0 0 0 4px ${errored ? "var(--red-bg)" : "rgba(11,93,59,0.18)"}` }}
+          />
+        )}
+      </div>
+      <div className="min-w-0 pb-0.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="mono text-[12.5px] font-semibold" style={{ color: errored ? "var(--red)" : "var(--ink)" }}>{name}</span>
+          {LEDGER_TOOLS.has(name) && (
+            <span className="mono text-[8.5px] uppercase tracking-[0.14em] px-1.5 py-0.5 rounded-sm" style={{ color: "var(--blue)", background: "var(--blue-bg)" }}>Hedera Agent Kit</span>
+          )}
+        </div>
+        <div className="mono text-[11.5px] mt-0.5 break-words" style={{ color: running ? "var(--blue)" : errored ? "var(--red)" : "var(--ink-mute)" }}>
+          {running ? (RUNNING_LABEL[name] ?? "Invoking Hedera Agent Kit…") : errored ? (tp.errorText ?? "tool error") : toolResult(name, out, tp.state)}
+        </div>
+        {!running && !errored && toolArgs(name, tp.input) && (
+          <div className="mono text-[10.5px] mt-0.5 break-words" style={{ color: "var(--ink-faint)" }}>← {toolArgs(name, tp.input)}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LiveTextBubble({ text }: { text: string }) {
+  return (
+    <div className="anim-stream-in rounded-[4px] p-3 text-[12.5px] leading-[1.55]" style={{ background: "var(--paper-2)", color: "var(--ink-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+      {text}
+    </div>
+  );
+}
+
+/** Live testnet sandbox — the whole timeline as a streaming column. Hitting Run calls the
+ * real LLM + Hedera testnet via /api/demo/live; each tool call and reasoning chunk appends
+ * downward (chatbot-style) with active loading state, and the viewport auto-anchors to the
+ * newest content as it generates. The verified run stays the stable proof if quota is out. */
+export function LiveColumn() {
+  const { messages, sendMessage, status, error, clearError } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/demo/live" }),
+  });
+  const busy = status === "submitted" || status === "streaming";
+  const ran = messages.length > 0;
+  const stream = messages.filter((m) => m.role === "assistant").flatMap((m) => m.parts);
+  const quotaish = error && /429|rate|quota|too many/i.test(error.message);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-anchor the viewport to the newest content while the agent is streaming. The
+  // signature changes as text grows and tool states advance, so the scroll keeps pace.
+  const sig = stream
+    .map((p) => (isTextUIPart(p) ? `t${p.text.length}` : isToolOrDynamicToolUIPart(p) ? `x${(p as LiveToolPart).state}` : ""))
+    .join("|");
+  useEffect(() => {
+    if (busy) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [sig, busy]);
+
+  function run() {
+    clearError();
+    sendMessage({ text: "Run the prepared live sandbox claim." });
+  }
+
+  const src = `/proofs/${LIVE_CLAIM.imageRef}`;
+  return (
+    <section className="max-w-[1100px] w-full mx-auto px-6 md:px-8 pt-3 pb-10 anim-reveal">
+      <div className="flex items-baseline gap-3 mb-2.5">
+        <span className="mono text-[10px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--blue)" }}>Live testnet sandbox</span>
+        <span className="mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>real run · streaming</span>
+      </div>
+      <h2 className="text-[20px] md:text-[23px] font-semibold tracking-[-0.015em] leading-[1.2] max-w-[820px]">
+        Run the real agent against a prepared claim — live on Hedera testnet.
+      </h2>
+      <p className="text-[14.5px] leading-[1.6] mt-2.5 max-w-[680px]" style={{ color: "var(--ink-mute)" }}>
+        This calls the live LLM and the Hedera testnet. Each step streams in below as it happens — the agent reads the contract, judges the photo, and writes proof-only artifacts to the ledger. The verified run keeps the stable proof if the free-tier model quota is unavailable.
+      </p>
+
+      {/* prepared claim context */}
+      <div className="mt-5 rounded-[5px] p-4 grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+        <div className="rounded-[4px] overflow-hidden" style={{ boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={`Proof photo — ${LIVE_CLAIM.promotion}`} className="w-full h-[140px] object-cover" />
+        </div>
+        <div className="min-w-0 flex flex-col gap-2">
+          <div>
+            <Lbl>Prepared claim</Lbl>
+            <div className="text-[14px] font-semibold mt-0.5">{LIVE_CLAIM.retailer} · {LIVE_CLAIM.promotion}</div>
+          </div>
+          <blockquote className="serif pl-3 text-[12.5px] leading-snug border-l-2 italic" style={{ borderColor: "var(--keyline-2)", color: "var(--ink-2)" }}>
+            “{LIVE_CLAIM.narrative}”
+          </blockquote>
+          <button
+            onClick={run}
+            disabled={busy}
+            className="self-start mt-1 mono text-[11px] uppercase tracking-[0.14em] font-semibold px-4 py-2.5 rounded-[3px] inline-flex items-center gap-2"
+            style={{
+              background: busy ? "var(--paper-sunken)" : "var(--ink)",
+              color: busy ? "var(--ink-faint)" : "white",
+              cursor: busy ? "wait" : "pointer",
+            }}
+          >
+            {busy ? <><Spinner size={12} color="var(--ink-faint)" /> Running…</> : ran ? "↻ Run again" : "▶ Run live adjudication"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-[4px] px-4 py-3" style={{ background: quotaish ? "var(--amber-bg)" : "var(--red-bg)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <div className="mono text-[10px] uppercase tracking-[0.14em] font-medium" style={{ color: quotaish ? "var(--amber)" : "var(--red)" }}>
+            {quotaish ? "Live sandbox quota reached" : "Live sandbox unavailable"}
+          </div>
+          <p className="text-[12px] leading-snug mt-1" style={{ color: "var(--ink-mute)" }}>
+            Switch to the Verified run at the top — it’s the same workflow captured from a successful live run, with real testnet hashes and verification links.
+          </p>
+        </div>
+      )}
+
+      {/* the streaming timeline */}
+      {ran && !error && (
+        <div className="mt-4 rounded-[5px] p-4 md:p-5 flex flex-col gap-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <div className="flex items-center gap-2">
+            <i className={"block w-1.5 h-1.5 rounded-full" + (busy ? " pulse-dot" : "")} style={{ background: busy ? "var(--blue)" : "var(--emerald)" }} />
+            <Lbl>{busy ? "Live on Hedera testnet · streaming" : "Run complete"}</Lbl>
+          </div>
+          {stream.map((p, i) => {
+            if (isTextUIPart(p)) return p.text.trim() ? <LiveTextBubble key={`t${i}`} text={p.text} /> : null;
+            if (isToolOrDynamicToolUIPart(p)) return <LiveToolRow key={`x${i}`} part={p} />;
+            return null;
+          })}
+          {busy && (
+            <div className="grid grid-cols-[18px_1fr] gap-3 anim-stream-in">
+              <div className="pt-0.5"><Spinner size={13} /></div>
+              <div className="mono text-[11.5px]" style={{ color: "var(--blue)" }}>Invoking Hedera Agent Kit…</div>
+            </div>
+          )}
+          {!busy && (
+            <div className="mt-1 rounded-[4px] px-3 py-2.5 flex items-center gap-2.5 flex-wrap" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>
+              <span className="text-[13px]" style={{ color: "var(--emerald)" }}>✓</span>
+              <span className="text-[12px]" style={{ color: "var(--ink)" }}>Live run complete — proof-only artifacts written to Hedera testnet, nothing confidential exposed.</span>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -159,12 +385,90 @@ function Field({ label, value, title }: { label: string; value: string; title?: 
   );
 }
 
-/** Scene 6 — selective disclosure. Defaults to the frozen "proven" result (bulletproof
- * for recording); "Re-verify now" genuinely proves the captured disclosure against the
- * live chain via the public /api/verify route. */
+// ── Client-side salted-Merkle recomputation (mirrors lib/merkle.ts exactly) ───────────
+// leaf = sha256(0x00 ‖ salt ‖ 0x1f ‖ label ‖ 0x1f ‖ value); node = sha256(0x01 ‖ L ‖ R).
+// Recomputing in the browser lets the verify scene SHOW the off-chain fields folding into
+// the exact root anchored on Hedera — the mapping is demonstrated, not asserted.
+const TEXT = new TextEncoder();
+const B_LEAF = Uint8Array.of(0x00);
+const B_NODE = Uint8Array.of(0x01);
+const B_SEP = Uint8Array.of(0x1f);
+
+function hexToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+function bytesToHex(b: Uint8Array): string {
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+}
+function cat(...arrs: Uint8Array[]): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(arrs.reduce((n, a) => n + a.length, 0));
+  let o = 0;
+  for (const a of arrs) { out.set(a, o); o += a.length; }
+  return out;
+}
+async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+}
+async function computeLeaf(saltHex: string, label: string, value: string): Promise<Uint8Array> {
+  return sha256(cat(B_LEAF, hexToBytes(saltHex), B_SEP, TEXT.encode(label), B_SEP, TEXT.encode(value)));
+}
+async function foldToRoot(leaf: Uint8Array, proof: { hash: string; right: boolean }[]): Promise<Uint8Array> {
+  let acc = leaf;
+  for (const step of proof) {
+    const sib = hexToBytes(step.hash);
+    acc = step.right ? await sha256(cat(B_NODE, acc, sib)) : await sha256(cat(B_NODE, sib, acc));
+  }
+  return acc;
+}
+
+const NICE_LABEL: Record<string, string> = {
+  decision: "Decision",
+  recommended_credit_pct: "Credit %",
+  max_settlement_hbar: "Contract max",
+};
+
+type ComputedRow = { label: string; value: string; salt: string; leafHex: string; rootHex: string; ok: boolean };
+
+/** Connector between two pipeline stages — a captioned down-arrow. */
+function Flow({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-0.5 py-0.5">
+      <span className="mono text-[9px] uppercase tracking-[0.14em] px-2 py-0.5 rounded-sm" style={{ color: "var(--ink-faint)", background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>{label}</span>
+      <span style={{ color: "var(--ink-faint)", lineHeight: 1, fontSize: 13 }}>↓</span>
+    </div>
+  );
+}
+
+/** Scene 6 — selective disclosure, made explicit. Shows the private off-chain fields
+ * (value + secret salt) hashing into per-field leaves, the leaves folding through their
+ * Merkle proofs into one root, and that root matching — bit for bit — the Salted Merkle
+ * Root anchored on Hedera at a fixed HCS sequence. "Re-verify against Hedera now" pulls
+ * the sequence + consensus back from the live Mirror Node via the public /api/verify. */
 export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
+  const [rows, setRows] = useState<ComputedRow[] | null>(null);
   const [live, setLive] = useState<"idle" | "loading" | "ok" | "soft">("idle");
   const [seq, setSeq] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const computed = await Promise.all(
+          claim.disclosure.revealed.map(async (r) => {
+            const leaf = await computeLeaf(r.salt, r.label, r.value);
+            const rootHex = bytesToHex(await foldToRoot(leaf, r.proof));
+            return { label: r.label, value: r.value, salt: r.salt, leafHex: bytesToHex(leaf), rootHex, ok: rootHex === claim.disclosure.commitment };
+          }),
+        );
+        if (alive) setRows(computed);
+      } catch {
+        if (alive) setRows([]);
+      }
+    })();
+    return () => { alive = false; };
+  }, [claim]);
 
   async function reverify() {
     setLive("loading");
@@ -186,11 +490,9 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
     }
   }
 
-  const niceLabel: Record<string, string> = {
-    decision: "Decision",
-    recommended_credit_pct: "Credit %",
-    max_settlement_hbar: "Contract max",
-  };
+  const allOk = !!rows && rows.length > 0 && rows.every((r) => r.ok);
+  const computedRoot = rows && rows.length > 0 ? rows[0].rootHex : claim.disclosure.commitment;
+  const seqShown = seq ?? claim.seq;
 
   return (
     <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px rgba(11,93,59,0.22)" }}>
@@ -198,26 +500,93 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
         <span className="mono text-[10px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--emerald)" }}>Selective disclosure · prove one fact, reveal nothing else</span>
         <span className="mono text-[10px]" style={{ color: "var(--ink-faint)" }}>scope: counterparty</span>
       </div>
-      <div className="px-5 py-4 bg-[var(--paper)]">
-        <div className="flex flex-col gap-2">
-          {claim.disclosure.revealed.map((r) => (
-            <div key={r.label} className="flex items-center gap-2.5 text-[12.5px]">
-              <span style={{ color: "var(--emerald)" }}>✓</span>
-              <span className="mono" style={{ color: "var(--ink-faint)" }}>{niceLabel[r.label] ?? r.label}</span>
-              <span className="mono font-medium" style={{ color: "var(--ink)" }}>{r.value.replace(/_/g, " ")}</span>
-              <span className="mono text-[10.5px]" style={{ color: "var(--ink-faint)" }}>proven against seq #{seq ?? claim.seq}</span>
+      <div className="px-5 py-4 bg-[var(--paper)] flex flex-col">
+        {/* Stage 1 — the private off-chain fields (value + the secret salt). */}
+        <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+          <div className="px-4 py-2.5 hairline-b flex items-center gap-2" style={{ background: "var(--paper-2)" }}>
+            <span style={{ color: "var(--ink-faint)" }}>🔒</span>
+            <Lbl>Private off-chain dossier · the fields you choose to reveal</Lbl>
+          </div>
+          <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {claim.disclosure.revealed.map((r) => (
+              <div key={r.label} className="flex flex-col gap-1 rounded-[3px] p-2.5" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+                <Lbl>{NICE_LABEL[r.label] ?? r.label}</Lbl>
+                <span className="mono text-[13px] font-semibold" style={{ color: "var(--ink)" }}>{r.value.replace(/_/g, " ")}</span>
+                <span className="mono text-[10px]" style={{ color: "var(--ink-faint)" }} title={r.salt}>salt&nbsp;{r.salt.slice(0, 8)}…{r.salt.slice(-4)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="px-4 pb-3 mono text-[10px] leading-snug" style={{ color: "var(--ink-faint)" }}>
+            Every other field — the full contract, the photo&rsquo;s hash, the model prompt, each clause finding — stays sealed off-chain. Their salts are never revealed.
+          </div>
+        </div>
+
+        <Flow label="SHA-256 leaf · the salt blinds the value" />
+
+        {/* Stage 2 — the per-field leaf hashes, recomputed live in the browser. */}
+        <div className="rounded-[5px] px-4 py-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <Lbl>Leaf hash per field · recomputed in your browser</Lbl>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {(rows ?? claim.disclosure.revealed.map((r) => ({ label: r.label, leafHex: "" }))).map((r) => (
+              <div key={r.label} className="mono text-[10.5px] truncate" style={{ color: "var(--ink-2)" }} title={"leafHex" in r ? r.leafHex : ""}>
+                <span style={{ color: "var(--ink-faint)" }}>{NICE_LABEL[r.label] ?? r.label}: </span>
+                {"leafHex" in r && r.leafHex ? `${r.leafHex.slice(0, 12)}…` : "hashing…"}
+              </div>
+            ))}
+          </div>
+          <div className="mono text-[9.5px] mt-2" style={{ color: "var(--ink-faint)" }}>leaf = SHA-256( 0x00 ‖ salt ‖ label ‖ value )</div>
+        </div>
+
+        <Flow label={`Merkle proof fold · ${claim.disclosure.revealed[0]?.proof.length ?? 0} sibling hashes per field`} />
+
+        {/* Stage 3 — the recomputed Salted Merkle root. */}
+        <div className="rounded-[5px] px-4 py-3 flex flex-col gap-1.5" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px rgba(11,93,59,0.22)" }}>
+          <Lbl>Recomputed Salted Merkle root</Lbl>
+          <div className="mono text-[12px] break-all" style={{ color: "var(--ink)" }}>{computedRoot}</div>
+          <div className="mono text-[10px] flex items-center gap-1.5" style={{ color: allOk ? "var(--emerald)" : "var(--ink-faint)" }}>
+            <span>{allOk ? "✓" : "…"}</span>
+            <span>{allOk ? "all three inclusion proofs fold to this one root" : "computing…"}</span>
+          </div>
+        </div>
+
+        {/* The match band — the computed root equals the anchored root, bit for bit. */}
+        <div className="flex items-center gap-2 self-center my-2">
+          <i className="block h-px w-8" style={{ background: "var(--emerald)" }} />
+          <span className="mono text-[9.5px] uppercase tracking-[0.16em] font-semibold px-2 py-0.5 rounded-sm" style={{ color: allOk ? "var(--emerald)" : "var(--ink-faint)", background: allOk ? "var(--emerald-bg)" : "var(--paper-2)", boxShadow: `inset 0 0 0 1px ${allOk ? "var(--emerald)" : "var(--keyline)"}` }}>
+            {allOk ? "✓ matches bit-for-bit" : "matches"}
+          </span>
+          <i className="block h-px w-8" style={{ background: "var(--emerald)" }} />
+        </div>
+
+        {/* Stage 4 — the immutable on-chain anchor (read back from the Mirror Node). */}
+        <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1.5px var(--emerald)" }}>
+          <div className="px-4 py-2.5 hairline-b flex items-center justify-between gap-2 flex-wrap" style={{ background: "linear-gradient(180deg, var(--emerald-bg), var(--paper))" }}>
+            <span className="mono text-[9.5px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--emerald)" }}>On-chain · Hedera Mirror Node (immutable)</span>
+            <DocSeal />
+          </div>
+          <div className="px-4 py-3 flex flex-col gap-2">
+            <Field label="Salted Merkle root (anchored)" value={claim.disclosure.commitment} title={claim.disclosure.commitment} />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="HCS sequence" value={`#${seqShown}`} />
+              <Field label="Consensus timestamp" value={claim.consensusTs} />
             </div>
-          ))}
+            <div className="flex items-center gap-3 flex-wrap mt-1">
+              <a href={HASHSCAN.hcsAudit} target="_blank" rel="noreferrer" className="mono text-[11px] flex items-center gap-1.5" style={{ color: "var(--emerald)" }}>
+                view topic {HASHSCAN.hcsAuditId} on HashScan <ExternalIcon size={11} />
+              </a>
+              <button onClick={reverify} disabled={live === "loading"} className="mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-[3px]" style={{ background: "transparent", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: live === "loading" ? "wait" : "pointer" }}>
+                {live === "loading" ? "verifying…" : live === "ok" ? `✓ confirmed live · seq #${seqShown}` : "Re-verify against Hedera now"}
+              </button>
+            </div>
+            {live === "soft" && (
+              <div className="mono text-[10.5px]" style={{ color: "var(--ink-faint)" }}>Live re-verification runs against the deployed testnet record.</div>
+            )}
+          </div>
         </div>
-        <div className="mt-3 flex items-center gap-3 flex-wrap">
-          <span className="text-[12px]" style={{ color: "var(--ink-mute)" }}>Everything else — the contract, the photo, the reasoning — stays sealed.</span>
-          <button onClick={reverify} disabled={live === "loading"} className="mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-[3px]" style={{ background: "transparent", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: live === "loading" ? "wait" : "pointer" }}>
-            {live === "loading" ? "verifying…" : live === "ok" ? "✓ verified live on Hedera" : "Re-verify against Hedera now"}
-          </button>
-        </div>
-        {live === "soft" && (
-          <div className="mt-2 mono text-[10.5px]" style={{ color: "var(--ink-faint)" }}>Live re-verification runs against the deployed testnet record.</div>
-        )}
+
+        <p className="text-[12px] leading-snug mt-3" style={{ color: "var(--ink-mute)" }}>
+          The contract, the photo, and the reasoning never leave your vault — only these three fields were disclosed, and they provably belong to the record anchored on Hedera at seq #{seqShown}.
+        </p>
       </div>
     </div>
   );
@@ -282,7 +651,7 @@ export function Recap({ claim }: { claim: FeaturedClaim }) {
       </div>
       <div className="rounded-[5px] px-5 py-4" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
         <p className="text-[12.5px] leading-snug" style={{ color: "var(--ink-mute)" }}>
-          And for the enterprise buyer who digs deeper: model-risk evidence, a provable access log, dispute handling, and an AP2 payment mandate all live in the operator console.
+          Everything above ran on Hedera testnet — the topic, token, accounts, and schedule all resolve on HashScan. Want to watch it happen? Switch to the <b style={{ color: "var(--ink)" }}>Live testnet sandbox</b> at the top: the agent reads a fresh contract, judges the photo, and writes proof-only artifacts to the ledger in real time.
         </p>
       </div>
     </div>

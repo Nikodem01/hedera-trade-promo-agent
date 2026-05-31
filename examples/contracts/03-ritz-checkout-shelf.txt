@@ -1,5 +1,5 @@
 RETAIL EXECUTION CONTRACT — POINT-OF-SALE SHELF
-Vendor: Mondelez International   Operator: 7-Eleven Franchise Store TX-1188
+Vendor: Brand_M   Operator: Retailer_W TX-1188
 Program: RITZ Checkout-Lane Feature, Spring 2026
 Document: RX-2026-0337
 

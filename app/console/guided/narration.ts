@@ -80,10 +80,10 @@ export function narrate(phase: Phase, ctx: NarrateCtx): SceneCopy {
         stepLabel: "It reads & judges",
         heading: "The agent reads the contract, then judges the photo against it.",
         plain:
-          "Watch it work. It pulls the contract and the photo, then reasons in phases — observe the photo, pull out each contract requirement, reconcile them, decide — and a second, independent model double-checks the verdict before anything can move.",
+          "The agent reasons in phases — observe the photo, pull out each contract requirement, reconcile them, decide — and a second, independent model double-checks the verdict before anything can move. Below is the cached anchor: a successful run replayed instantly. Flip the switch to the Live testnet sandbox at the top to watch the agent make these same Agent Kit calls live.",
         annotation: {
           tag: "Hedera Agent Kit v4 plugin",
-          body: "adjudicate_claim, compute_settlement and propose_settlement are custom tools this agent exposes through the Hedera Agent Kit — the plugin doing the work you're watching.",
+          body: "adjudicate_claim, compute_settlement and propose_settlement are custom tools exposed through the Hedera Agent Kit. The live sandbox also surfaces core non-query Hedera Agent Kit tools for proof-only ledger artifacts.",
         },
       };
 

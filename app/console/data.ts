@@ -92,7 +92,7 @@ export type FeaturedClaim = {
 };
 
 // Real on-chain artifacts (Hedera testnet) — every id here resolves on HashScan.
-const HCS_AUDIT_ID = "0.0.9069962";
+const HCS_AUDIT_ID = "0.0.9104996";
 const HTS_RECEIPT_ID = "0.0.9069963";
 const NFT_ATTESTATION_ID = "0.0.9088330";
 const PUSDC_ID = "0.0.9089483";
@@ -122,9 +122,9 @@ export const HASHSCAN = {
 };
 
 const FEATURED_CONTRACT = `CO-OPERATIVE MARKETING SCHEDULE — SEASONAL FLOOR DISPLAY
-Between Mondelez International (the "Supplier") and Woolworths Group (the "Merchant")
+Between Brand_M (the "Supplier") and Retailer_W (the "Merchant")
 Re: Cadbury Easter 2026 Freestanding Seasonal Display
-Schedule reference: WOW/CADB/EAST-2026
+Schedule reference: RW/CADB/EAST-2026
 
 (a)  Display window. The seasonal display shall be live and maintained on the sales
      floor for the full four-week Easter selling period — March 23 through April 20,
@@ -155,22 +155,23 @@ Schedule reference: WOW/CADB/EAST-2026
 `;
 
 /**
- * REAL captured run (Hedera testnet, 2026-05-31 07:20:22 UTC) — replaces the former scaffold.
+ * REAL captured run (Hedera testnet, 2026-05-31 10:23:02 UTC) — replaces the former scaffold.
  * Every on-chain value resolves on HashScan: pass-1 + pass-2 commitments anchored to HCS
- * (final seq 57), settlement schedule 0.0.9104144 executed (18.75 pUSDC), attestation
- * NFT serial 4. Captured via POST /api/capture (dev-only; 403 on public deploy).
+ * on the clean Week 2 topic (final seq 2), settlement schedule 0.0.9105009 executed
+ * (18.75 pUSDC), attestation NFT serial 5. Captured via POST /api/capture
+ * (dev-only; 403 on public deploy).
  * Model + chain values are verbatim; only display labels (claimId/contractId/submittedAt/
  * submittedBy) frame the demo, and pass-1 credit% is shown as 0 (no credit until evidence).
  */
 export const FEATURED: FeaturedClaim = {
-  retailer: "Woolworths",
-  retailerId: "Banner-wide · AU",
-  promotion: "Cadbury Easter FSDU",
-  promoSub: "Front-of-store display · Mar 23 – Apr 20, 2026",
-  claimId: "CLM-2026-04-WOW-CE",
-  contractId: "0.0.9067734",
-  submittedAt: "2026-04-22 09:48 UTC",
-  submittedBy: "J. Okonkwo (Woolworths Merch)",
+  retailer: "Retailer_W",
+  retailerId: "Banner-wide · anonymized",
+  promotion: "Brand_C Seasonal FSDU",
+  promoSub: "Front-of-store seasonal display · Mar 23 - Apr 20, 2026",
+  claimId: "CLM-2026-05-CLEAN",
+  contractId: "0.0.9104996",
+  submittedAt: "2026-05-31 10:23 UTC",
+  submittedBy: "Analyst_R (retail execution)",
   contractText: FEATURED_CONTRACT,
   narrative: "Cadbury Easter FSDU placed in a front-of-store actionway with full Easter signage and a prominent Creme Egg presentation. The display ran across the Easter selling period. Requesting settlement of the co-op marketing fee.",
   imageRef: "Cadbury-Woolworths-Easter-POS-Unit_1.jpg",
@@ -181,46 +182,77 @@ export const FEATURED: FeaturedClaim = {
     max_settlement_hbar: 25,
     criteria: [
       {
-        requirement: "Display window: March 23 through April 20, 2026.",
+        requirement: "Display live between March 23 – April 20, 2026",
         clause_ref: "Section (a)",
         status: "indeterminate",
-        observed_in_photo: "The photograph does not contain a date, timestamp, or any contextual marker to verify the date of capture or the duration the display was maintained.",
-        concern: "The critical requirement to verify the full four-week duration cannot be confirmed from a static image without a timestamp."
+        observed_in_photo: "The photo clearly shows the display is set up, but there is no date stamp or visible metadata to confirm the specific timing within the window.",
+        concern: "The photo lacks a timestamp; the contract requires verification of duration."
       },
       {
-        requirement: "Location: Freestanding seasonal display unit (FSDU).",
+        requirement: "Freestanding seasonal display unit (FSDU)",
         clause_ref: "Section (b)",
         status: "met",
-        observed_in_photo: "A circular freestanding display unit is positioned in the actionway, distinct from the adjacent in-line gondola shelving.",
+        observed_in_photo: "A prominent circular freestanding display unit is positioned in the actionway.",
         concern: "",
-        box: [424, 386, 932, 601]
+        box: [
+          180,
+          385,
+          930,
+          600
+        ]
       },
       {
-        requirement: "Product presentation: Prominent presentation of Cadbury Easter range.",
+        requirement: "Prominent Cadbury Easter range presentation",
         clause_ref: "Section (c)",
         status: "met",
-        observed_in_photo: "Cadbury Easter product is visible on the shelves of the FSDU and prominently displayed on the adjacent gondola unit.",
+        observed_in_photo: "Cadbury Easter egg products are clearly stocked on the FSDU shelves.",
         concern: "",
-        box: [442, 401, 560, 582]
+        box: [
+          420,
+          400,
+          630,
+          590
+        ]
       },
       {
-        requirement: "Theming: Easter-themed signage with Cadbury mark.",
+        requirement: "Easter-themed signage with Cadbury mark",
         clause_ref: "Section (d)",
         status: "met",
-        observed_in_photo: "The FSDU features a rabbit topper and 'Salted Caramel' signage containing the Cadbury logo, which satisfies the Easter theming and branding requirement.",
+        observed_in_photo: "Branded Cadbury signage featuring Easter thematic elements is displayed on the FSDU header.",
         concern: "",
-        box: [277, 437, 335, 497]
+        box: [
+          340,
+          430,
+          520,
+          560
+        ]
       }
     ],
-    reasoning_summary: "The retailer successfully fulfilled the visual requirements, including the placement of an FSDU in a high-traffic zone, prominent Cadbury Easter branding, and product presentation. However, the contract specifically requires proof of the display's duration across the April 2026 window. Since the submitted photo lacks a date or timestamp, the duration cannot be verified. Compliance is indeterminate for the timing requirement per Clause (a).",
-    evidence_requested: "Please provide a dated compliance report, a store system timestamp, or a secondary photograph from a different date within the promotional window to confirm the display was maintained for the required duration."
+    reasoning_summary: "The retailer has successfully executed the physical setup of the display, meeting location, product presentation, and theming requirements (Sections b, c, d). However, per Section (a) and (e), the photo does not confirm the display was live during the contracted window. Consequently, the claim is put on hold pending temporal verification.",
+    evidence_requested: "Please provide a point-of-sale timestamp, a dated compliance report, or an additional photo containing a visible date (e.g., a store receipt or newspaper) to verify the display was active during the March 23 – April 20, 2026 window."
   },
-  review: { agrees: true, concern: "none", recommended_action: "accept" },
+  review: {
+    agrees: true,
+    concern: "none",
+    recommended_action: "accept"
+  },
   citations: [
-    { ref: "Section (a)", verified: true },
-    { ref: "Section (b)", verified: true },
-    { ref: "Section (c)", verified: true },
-    { ref: "Section (d)", verified: true }
+    {
+      ref: "Section (a)",
+      verified: true
+    },
+    {
+      ref: "Section (b)",
+      verified: true
+    },
+    {
+      ref: "Section (c)",
+      verified: true
+    },
+    {
+      ref: "Section (d)",
+      verified: true
+    }
   ],
   evidenceReply: "Point-of-sale scan log confirms the display planogram went live on March 30, 2026 — one week into the contracted window — and remained live through end of day April 20, 2026: three of the four contracted weeks. Signed store compliance report dated April 20, 2026 attached.",
   revisedAssessment: {
@@ -230,39 +262,53 @@ export const FEATURED: FeaturedClaim = {
     max_settlement_hbar: 25,
     criteria: [
       {
-        requirement: "Live for full 4-week window (March 23 - April 20, 2026)",
-        clause_ref: "Section (a)",
+        requirement: "Display live for the full four-week period (March 23 – April 20, 2026).",
+        clause_ref: "Section (a), (f)",
         status: "partial",
-        observed_in_photo: "The retailer admits, and POS data confirms, the display was live from March 30, 2026, to April 20, 2026.",
-        concern: "The display was missing for the first week of the contracted window (March 23 - March 29).",
-        box: [207, 375, 966, 608]
+        observed_in_photo: "The photo does not contain a date stamp. Follow-up POS scan logs confirm the display was live from March 30, 2026 to April 20, 2026 (3 weeks).",
+        concern: "The display was not active for the full contracted window of four weeks; it was active for three weeks."
       },
       {
-        requirement: "Freestanding seasonal display unit (FSDU)",
+        requirement: "Freestanding seasonal display unit (FSDU).",
         clause_ref: "Section (b)",
         status: "met",
-        observed_in_photo: "A circular freestanding display unit is positioned in the actionway.",
+        observed_in_photo: "A circular, multi-tiered FSDU is positioned in the center of the aisle.",
         concern: "",
-        box: [207, 375, 966, 608]
+        box: [
+          233,
+          386,
+          960,
+          603
+        ]
       },
       {
-        requirement: "Prominent presentation of Cadbury Easter range",
+        requirement: "Prominent presentation of Cadbury Easter range.",
         clause_ref: "Section (c)",
         status: "met",
-        observed_in_photo: "The display unit is stocked with Cadbury branded Easter products.",
+        observed_in_photo: "Cadbury branded Easter products are clearly visible on the FSDU tiers.",
         concern: "",
-        box: [207, 375, 966, 608]
+        box: [
+          255,
+          417,
+          526,
+          563
+        ]
       },
       {
-        requirement: "Easter-themed signage bearing the Cadbury mark",
+        requirement: "Easter-themed signage bearing the Cadbury mark.",
         clause_ref: "Section (d)",
         status: "met",
-        observed_in_photo: "The display unit features 'Salted Caramel' signage with visible Cadbury/Dairy Milk branding.",
+        observed_in_photo: "Easter-themed signage featuring the Cadbury logo and 'Salted Caramel' branding is attached to the unit.",
         concern: "",
-        box: [433, 436, 545, 563]
+        box: [
+          435,
+          436,
+          532,
+          562
+        ]
       }
     ],
-    reasoning_summary: "The retailer has provided photographic evidence of the compliant FSDU installation and followed up with POS data and a compliance report confirming the display was live from March 30, 2026, to April 20, 2026. This equates to 3 out of the 4 contracted weeks. Pursuant to Clause (f), the 25 HBAR maximum settlement is pro-rated at 75% for partial fulfillment, resulting in a payment of 18.75 HBAR."
+    reasoning_summary: "The retailer successfully executed the display requirements, including the use of an FSDU, proper product placement, and themed signage. However, as established by the point-of-sale scan log and compliance report provided in the follow-up evidence, the display was only active for three weeks of the four-week contract window. Pursuant to clause (a) and the pro-rata provision in clause (f), the settlement is adjusted to 75% of the maximum 25 HBAR, resulting in a payment of 18.75 HBAR."
   },
   settlement: {
     amount_hbar: 18.75,
@@ -271,50 +317,95 @@ export const FEATURED: FeaturedClaim = {
     justification: "Partial compliance — 75% credit applied, capped at the contract maximum (25 HBAR) and the 50 HBAR safety cap."
   },
   amountPusdc: 18.75,
-  scheduleId: "0.0.9104144",
-  nftSerial: "4",
-  commitment: "22323729f4d0b504f333c6b22a93b51870966c2a9f27fd1994375dbe268ed04e",
+  scheduleId: "0.0.9105009",
+  nftSerial: "5",
+  commitment: "a0d2162ee059c7b27009680b4d98827e7e160d29ff76b7884a9c8abf679238bf",
   imageFp: "80d8d9c333bbd52f90c63600bef0dc1b18429dfcf3113988db5681a2cf2bbfd4",
-  seq: 57,
-  consensusTs: "2026-05-31 07:20:22 UTC",
+  seq: 2,
+  consensusTs: "2026-05-31 10:23:02 UTC",
   model: "gemini-3.1-flash-lite-preview",
   disclosure: {
-    commitment: "22323729f4d0b504f333c6b22a93b51870966c2a9f27fd1994375dbe268ed04e",
+    commitment: "a0d2162ee059c7b27009680b4d98827e7e160d29ff76b7884a9c8abf679238bf",
     revealed: [
       {
         label: "decision",
         value: "partial_credit",
-        salt: "edcc1f3e78e0909dcaf319fe07550f51",
+        salt: "ad3135d6b1c280abd9bf240c151c1d4f",
         proof: [
-          { hash: "5eb2433baa5bcfed10978af5c212b25998428b8d1f912b65e2313a922c5e10d2", right: false },
-          { hash: "2abd6e5937efaa7c6e1b84ae2c6c108d7006c9d00c212e4010e1b595cfe7d24e", right: false },
-          { hash: "b05cab60a4ffef7847d4b11b2d2fdb22f105d56cf53b44fb3550faf5c4268551", right: false },
-          { hash: "480c63e62e280271d1f0128b293299450e0ef71de3749e2c0504e0d1a283e497", right: true },
-          { hash: "4157840c8118e7b42b9c288516188659e42ba26a4b02d5a5132f6e5c3c8e6757", right: true }
+          {
+            hash: "be6416a50dee1f5bb250fc5bbea21326d124c73db87fde634ae91856a448069f",
+            right: false
+          },
+          {
+            hash: "a99fc6c6bd14940de402019241a8d7bf6c89d4363c9330dba3ff6e1cd6712334",
+            right: false
+          },
+          {
+            hash: "1b82f96792324a10712e8fc611397fdf42c4e806dd09f6c53176dec5a4bdcc31",
+            right: false
+          },
+          {
+            hash: "99b15c69aba4d40fca0665d05f88e8f9944193814618f6234781aa7667fd8066",
+            right: true
+          },
+          {
+            hash: "cd2b96cf89ac5d18954037d92c16037f68d70b587d3488ef29a09d7683cdc473",
+            right: true
+          }
         ]
       },
       {
         label: "recommended_credit_pct",
         value: "75",
-        salt: "514f02f487d29cb2e3899788259207eb",
+        salt: "3b5bf981d71b1babf95a165de177e893",
         proof: [
-          { hash: "6e1f7d4cf6e868818c2fd00d36b8b995692692a33c95d9a47aba3181a15546c5", right: false },
-          { hash: "2cae119ee2f36c92793d133549c1bd4298a040844da3058c9d280c3a49d9e2b9", right: true },
-          { hash: "16dd80610809564ac16b655a24c05401c0e326146b7c3790753e3e0313cf880a", right: true },
-          { hash: "e1752a452d8936a4b59a4f261b4756c53e920911e9a9330722f01d1631aae95a", right: false },
-          { hash: "4157840c8118e7b42b9c288516188659e42ba26a4b02d5a5132f6e5c3c8e6757", right: true }
+          {
+            hash: "212bf95e9d0cc381f7b0670611f97a82c2b7114e8a9cb8219cdcac94976eb21d",
+            right: false
+          },
+          {
+            hash: "2acbc4162cc7cbc67c7ec75ee778c6b29f63fe8167fbe10ba68afd4c0369b03f",
+            right: true
+          },
+          {
+            hash: "e8e04a2c2c28c893fee80d3d5bb81e8c887ddc85166db0aa97e4b4e701ee4272",
+            right: true
+          },
+          {
+            hash: "ef354d09d1106f25df8696bf962e481e6b9056b5b0a694f9b36efe8502049165",
+            right: false
+          },
+          {
+            hash: "cd2b96cf89ac5d18954037d92c16037f68d70b587d3488ef29a09d7683cdc473",
+            right: true
+          }
         ]
       },
       {
         label: "max_settlement_hbar",
         value: "25",
-        salt: "fbc4777edfb0f92a3016719168503cc6",
+        salt: "e63dc3a0c3481f3a0f232fe0162ffcb6",
         proof: [
-          { hash: "16fb84e04ea66376a2c38e78d128a64f74a78e111b0a067ee5903530d941ac82", right: true },
-          { hash: "e7ad21c0e44062f0df95d7eddacc5f91ecee9b92780134693de0cdea81835032", right: false },
-          { hash: "16dd80610809564ac16b655a24c05401c0e326146b7c3790753e3e0313cf880a", right: true },
-          { hash: "e1752a452d8936a4b59a4f261b4756c53e920911e9a9330722f01d1631aae95a", right: false },
-          { hash: "4157840c8118e7b42b9c288516188659e42ba26a4b02d5a5132f6e5c3c8e6757", right: true }
+          {
+            hash: "bc11ed15c352f3235eebfe9ee9dd34b05b4b8c6d0d6e1b3578793a856087daec",
+            right: true
+          },
+          {
+            hash: "97f353e86290c7b725df20e6b44911181609a18ea8cbdb268b97d020689a6c7d",
+            right: false
+          },
+          {
+            hash: "e8e04a2c2c28c893fee80d3d5bb81e8c887ddc85166db0aa97e4b4e701ee4272",
+            right: true
+          },
+          {
+            hash: "ef354d09d1106f25df8696bf962e481e6b9056b5b0a694f9b36efe8502049165",
+            right: false
+          },
+          {
+            hash: "cd2b96cf89ac5d18954037d92c16037f68d70b587d3488ef29a09d7683cdc473",
+            right: true
+          }
         ]
       }
     ]
@@ -325,15 +416,12 @@ export const FEATURED: FeaturedClaim = {
 export function featuredToolScript(phase: "initial" | "after_evidence"): ToolCall[] {
   if (phase === "after_evidence") {
     return [
-      { tool: "validate_evidence_reply", args: "POS timestamps · Apr 04–16", result: "ingested · 13 records" },
-      { tool: "adjudicate_claim", args: "contract + photo + timing", result: "decision: partial_credit · confidence 0.82", verdict: true },
+      { tool: "adjudicate_claim", args: "contract + photo + timing evidence", result: `decision: partial_credit · HCS seq #${FEATURED.seq}`, verdict: true },
       { tool: "compute_settlement", args: "credit=75% · cap=25", result: "amount=18.75 pUSDC" },
       { tool: "propose_settlement", args: `commit ${FEATURED.commitment.slice(0, 12)}…`, result: `schedule ${FEATURED.scheduleId} · awaiting 2 signatures` },
     ];
   }
   return [
-    { tool: "fetch_promotion_contract", args: `contract_id=${FEATURED.contractId}`, result: "4 clauses · window, placement, facings, signage" },
-    { tool: "fetch_proof_photo", args: `claim_id=${FEATURED.claimId}`, result: "1620×2160 jpeg · EXIF stripped" },
-    { tool: "adjudicate_claim", args: "contract + photo", result: "decision: request_more_evidence · confidence 0.56", verdict: true },
+    { tool: "adjudicate_claim", args: "contract + proof photo + narrative", result: "decision: request_more_evidence · confidence 0.95 · HCS anchored", verdict: true },
   ];
 }

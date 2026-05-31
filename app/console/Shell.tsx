@@ -72,7 +72,9 @@ export function Shell({ scenarios, initialPublicReadonly = false }: { scenarios:
   return (
     <>
       <Header />
-      <nav className="hairline-b sticky top-0 z-20" style={{ background: "var(--paper-2)" }}>
+      {/* In the public tour the guided RunModeBar is the sticky global control, so this
+          nav stays in normal flow; operator mode keeps its sticky workspace tabs. */}
+      <nav className={"hairline-b" + (publicTour ? "" : " sticky top-0 z-20")} style={{ background: "var(--paper-2)" }}>
         <div className="max-w-[1100px] mx-auto px-6 md:px-8 flex items-center gap-1 flex-wrap">
           {!publicTour &&
             TABS.map((t) => {
@@ -86,16 +88,13 @@ export function Shell({ scenarios, initialPublicReadonly = false }: { scenarios:
             })}
           {publicTour && (
             <span className="mono text-[11px] uppercase tracking-[0.12em] px-3 py-3" style={{ color: "var(--ink)", fontWeight: 600 }}>
-              Guided demo
+              Interactive demo
             </span>
           )}
           {publicReadonly && (
             <div className="ml-auto flex items-center gap-2 py-1.5">
               {mode === "public" ? (
-                <>
-                  <span className="mono text-[10px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-sm" style={{ color: "var(--blue)", background: "var(--blue-bg)" }}>Public demo · read-only</span>
-                  <button onClick={() => setUnlockOpen((v) => !v)} className="mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-[3px]" style={{ color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline-2)", cursor: "pointer" }}>Operator access</button>
-                </>
+                <span className="mono text-[10px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-sm" style={{ color: "var(--blue)", background: "var(--blue-bg)" }}>Cached anchor + live sandbox</span>
               ) : (
                 <>
                   <span className="mono text-[10px] uppercase tracking-[0.12em] px-2 py-0.5 rounded-sm" style={{ color: "var(--emerald)", background: "var(--emerald-bg)" }}>Operator · live</span>
