@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/app/console/components";
 import AdjudicationLive, { type Scenario } from "@/app/components/Console";
-import ScriptedConsole from "@/app/console/Console";
+import GuidedTour from "@/app/console/GuidedTour";
 import { TrustCenter } from "./TrustCenter";
 import { SettlementFund } from "./SettlementFund";
 import { ModelRisk } from "./ModelRisk";
@@ -60,20 +60,31 @@ export function Shell({ scenarios }: { scenarios: Scenario[] }) {
     setWs("adjudication");
   }
 
+  // Public read-only: the guided tour is the WHOLE surface — a calm, self-explaining
+  // walkthrough, no workspace tabs to get lost in. The "Public demo · read-only" badge
+  // and the "Operator access" unlock stay, so a buyer can step into the live console.
+  const publicTour = mode === "public";
+
   return (
     <>
       <Header />
       <nav className="hairline-b sticky top-0 z-20" style={{ background: "var(--paper-2)" }}>
         <div className="max-w-[1100px] mx-auto px-6 md:px-8 flex items-center gap-1 flex-wrap">
-          {TABS.map((t) => {
-            const active = ws === t.id;
-            return (
-              <button key={t.id} onClick={() => setWs(t.id)} className="mono text-[11px] uppercase tracking-[0.12em] px-3 py-3 relative" style={{ color: active ? "var(--ink)" : "var(--ink-faint)", fontWeight: active ? 600 : 500, cursor: "pointer" }}>
-                {t.label}
-                {active && <i className="absolute left-3 right-3 bottom-0 h-[2px]" style={{ background: "var(--emerald)" }} />}
-              </button>
-            );
-          })}
+          {!publicTour &&
+            TABS.map((t) => {
+              const active = ws === t.id;
+              return (
+                <button key={t.id} onClick={() => setWs(t.id)} className="mono text-[11px] uppercase tracking-[0.12em] px-3 py-3 relative" style={{ color: active ? "var(--ink)" : "var(--ink-faint)", fontWeight: active ? 600 : 500, cursor: "pointer" }}>
+                  {t.label}
+                  {active && <i className="absolute left-3 right-3 bottom-0 h-[2px]" style={{ background: "var(--emerald)" }} />}
+                </button>
+              );
+            })}
+          {publicTour && (
+            <span className="mono text-[11px] uppercase tracking-[0.12em] px-3 py-3" style={{ color: "var(--ink)", fontWeight: 600 }}>
+              Guided demo
+            </span>
+          )}
           {publicReadonly && (
             <div className="ml-auto flex items-center gap-2 py-1.5">
               {mode === "public" ? (
@@ -99,22 +110,23 @@ export function Shell({ scenarios }: { scenarios: Scenario[] }) {
         )}
       </nav>
 
-      <div hidden={ws !== "adjudication"}>
-        {mode === "operator" ? (
-          <AdjudicationLive scenarios={scenarios} onRunComplete={onRunComplete} />
-        ) : (
-          <ScriptedConsole embedded />
-        )}
-      </div>
-
-      {ws === "trust" && <TrustCenter refreshKey={refreshKey} canAct={canAct} />}
-      {ws === "modelrisk" && (
+      {publicTour ? (
+        <GuidedTour embedded />
+      ) : (
         <>
-          <WorkspaceIntro title="Model Risk" body="Validation, independent review, live monitoring, explainability, and model lineage — the OCC-style evidence for trusting AI to move money." />
-          <ModelRisk refreshKey={refreshKey} />
+          <div hidden={ws !== "adjudication"}>
+            <AdjudicationLive scenarios={scenarios} onRunComplete={onRunComplete} />
+          </div>
+          {ws === "trust" && <TrustCenter refreshKey={refreshKey} canAct={canAct} />}
+          {ws === "modelrisk" && (
+            <>
+              <WorkspaceIntro title="Model Risk" body="Validation, independent review, live monitoring, explainability, and model lineage — the OCC-style evidence for trusting AI to move money." />
+              <ModelRisk refreshKey={refreshKey} />
+            </>
+          )}
+          {ws === "settlement" && <SettlementFund refreshKey={refreshKey} canAct={canAct} />}
         </>
       )}
-      {ws === "settlement" && <SettlementFund refreshKey={refreshKey} canAct={canAct} />}
     </>
   );
 }

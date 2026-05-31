@@ -1,8 +1,8 @@
-// Design preview: the full PromoProof console rendered with scenario scripts and
-// real HashScan links — no API key needed. The live, agent-driven console is at
-// "/" (app/components/Console.tsx). These share the same design component library.
-import Console from "../console/Console";
+// Design preview / rehearsal: the guided public tour rendered with the frozen featured
+// run and real HashScan links — no API key, no operator cookie needed. This is the same
+// experience the public read-only deploy serves at "/".
+import GuidedTour from "../console/GuidedTour";
 
 export default function PreviewPage() {
-  return <Console />;
+  return <GuidedTour />;
 }

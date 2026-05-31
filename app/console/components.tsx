@@ -6,7 +6,7 @@ import type {
   ComplianceAssessmentType,
   SettlementProposalType,
 } from "@/lib/plugins/tpp-evaluator/schemas";
-import { HASHSCAN, SCENARIOS, type Scenario, type ToolCall } from "./data";
+import { HASHSCAN, type Scenario, type ToolCall } from "./data";
 import { scheduleUrl, accountUrl } from "@/lib/hedera/hashscan";
 
 /** Minimal header shape the verdict/settlement cards read — satisfied by both the
@@ -62,59 +62,6 @@ export function Header() {
         </div>
       </div>
     </header>
-  );
-}
-
-export function ClaimPicker({ active, onSelect }: { active: string | null; onSelect: (id: string) => void }) {
-  const claims = Object.values(SCENARIOS);
-  return (
-    <section className="max-w-[1100px] mx-auto px-6 md:px-8 pt-6 pb-4 w-full">
-      <div className="flex items-baseline justify-between mb-3">
-        <h2 className="mono text-[10.5px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--ink-faint)" }}>
-          Active claims · awaiting adjudication
-        </h2>
-        <span className="mono text-[10.5px] uppercase tracking-[0.16em]" style={{ color: "var(--ink-faint)" }}>
-          {claims.length} pending
-        </span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {claims.map((c) => {
-          const isActive = active === c.id;
-          return (
-            <button
-              key={c.id}
-              onClick={() => onSelect(c.id)}
-              className="text-left p-4 rounded-[4px] relative group transition-all"
-              style={{
-                background: isActive ? "var(--paper)" : "var(--paper-2)",
-                boxShadow: isActive
-                  ? "inset 0 0 0 1.5px var(--ink), 0 6px 18px rgba(22,22,26,0.06)"
-                  : "inset 0 0 0 1px var(--keyline)",
-              }}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[14px] font-semibold leading-tight">{c.retailer}</div>
-                  <div className="mono text-[10.5px] uppercase tracking-[0.12em] mt-0.5" style={{ color: "var(--ink-faint)" }}>{c.retailerId}</div>
-                </div>
-                {isActive && (
-                  <span className="mono text-[9.5px] uppercase tracking-[0.16em] font-medium px-1.5 py-0.5 rounded-sm" style={{ background: "var(--ink)", color: "var(--paper)" }}>
-                    Active
-                  </span>
-                )}
-              </div>
-              <div className="mt-3 text-[13px] leading-snug" style={{ color: "var(--ink-2)" }}>{c.promotion}</div>
-              <div className="text-[11.5px] mt-0.5" style={{ color: "var(--ink-faint)" }}>{c.promoSub}</div>
-              <div className="mt-3 pt-3 hairline-t flex items-center justify-between">
-                <span className="text-[10.5px] uppercase tracking-[0.14em] mono" style={{ color: "var(--ink-faint)" }}>Max settle</span>
-                <span className="mono text-[13px] font-semibold tabular-nums">{c.maxHbar} HBAR</span>
-              </div>
-              <div className="serif text-[10.5px] italic mt-1.5" style={{ color: "var(--ink-faint)" }}>{c.expected}</div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
   );
 }
 
@@ -504,7 +451,7 @@ export function OverridePanel({ commitment, priorDecision }: { commitment: strin
 
 type AuthenticityInfo = { has_capture_metadata: boolean; capture_time?: string; gps?: string; camera?: string; manipulation_likelihood?: number; manipulation_note?: string };
 
-export function VerdictCard({ assessment, scenario, revised = false, provenance, onClauseClick, verify, imageSrc, authenticity, citations, review }: { assessment: ComplianceAssessmentType; scenario: CardScenario; revised?: boolean; provenance?: { model: string; adjudicated_at: string; commitment: string; image_fp?: string }; onClauseClick?: (ref: string) => void; verify?: VerifyInputs; imageSrc?: string; authenticity?: AuthenticityInfo; citations?: { ref: string; verified: boolean }[]; review?: { agrees: boolean; concern: string; recommended_action: "accept" | "escalate" } }) {
+export function VerdictCard({ assessment, scenario, revised = false, provenance, onClauseClick, verify, imageSrc, authenticity, citations, review, unit = "HBAR" }: { assessment: ComplianceAssessmentType; scenario: CardScenario; revised?: boolean; provenance?: { model: string; adjudicated_at: string; commitment: string; image_fp?: string }; onClauseClick?: (ref: string) => void; verify?: VerifyInputs; imageSrc?: string; authenticity?: AuthenticityInfo; citations?: { ref: string; verified: boolean }[]; review?: { agrees: boolean; concern: string; recommended_action: "accept" | "escalate" }; unit?: string }) {
   const citeOk = citations ? citations.filter((c) => c.verified).length : 0;
   const citeBad = citations ? citations.filter((c) => !c.verified) : [];
   const stp = stpStatus(assessment);
@@ -549,7 +496,7 @@ export function VerdictCard({ assessment, scenario, revised = false, provenance,
         <div className="anim-seal"><DecisionBadge decision={assessment.decision} /></div>
         <ConfidenceMeter value={assessment.confidence} color={meta.color} />
         <Stat label="Recommended credit" value={assessment.recommended_credit_pct + ""} unit="%" accent={meta.color === "emerald" || meta.color === "amber"} />
-        <Stat label="Max settlement" value={assessment.max_settlement_hbar + ""} unit="HBAR" mono />
+        <Stat label="Max settlement" value={assessment.max_settlement_hbar + ""} unit={unit} mono />
       </div>
 
       {imageSrc && boxed.length > 0 && (
