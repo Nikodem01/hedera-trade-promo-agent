@@ -24,10 +24,13 @@ const TABS: { id: Workspace; label: string }[] = [
   { id: "settlement", label: "Settlement & Fund" },
 ];
 
-export function Shell({ scenarios }: { scenarios: Scenario[] }) {
+export function Shell({ scenarios, initialPublicReadonly = false }: { scenarios: Scenario[]; initialPublicReadonly?: boolean }) {
   const [ws, setWs] = useState<Workspace>("adjudication");
-  const [mode, setMode] = useState<"public" | "operator">("operator");
-  const [publicReadonly, setPublicReadonly] = useState(false);
+  // Seeded from the server so the public deploy renders the tour on first paint;
+  // the client /api/config fetch below just confirms it (and lets an unlocked
+  // operator session that set the cookie stay in operator mode).
+  const [mode, setMode] = useState<"public" | "operator">(initialPublicReadonly ? "public" : "operator");
+  const [publicReadonly, setPublicReadonly] = useState(initialPublicReadonly);
   const [refreshKey, setRefreshKey] = useState(0);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [token, setToken] = useState("");
@@ -37,7 +40,8 @@ export function Shell({ scenarios }: { scenarios: Scenario[] }) {
       .then((r) => r.json())
       .then((c) => {
         setPublicReadonly(!!c.publicReadonly);
-        setMode(c.publicReadonly ? "public" : "operator");
+        // Only force public when read-only; never downgrade an operator who unlocked.
+        if (c.publicReadonly) setMode((m) => (m === "operator" ? m : "public"));
       })
       .catch(() => {});
   }, []);

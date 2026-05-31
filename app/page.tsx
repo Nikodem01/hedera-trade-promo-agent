@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type Scenario } from "./components/Console";
 import { Shell } from "./console/Shell";
+import { PUBLIC_READONLY } from "@/lib/guard";
 
 // Server-side scenario catalog. Contract prose is read from the fixtures so the
 // client never duplicates it; the proof image + retailer narrative complete the claim.
@@ -49,5 +50,7 @@ export default async function Page() {
     })),
   );
 
-  return <Shell scenarios={scenarios} />;
+  // Seed the mode server-side so a public deploy renders the guided tour on the FIRST
+  // paint (no operator-UI flash before the client /api/config fetch resolves).
+  return <Shell scenarios={scenarios} initialPublicReadonly={PUBLIC_READONLY} />;
 }
