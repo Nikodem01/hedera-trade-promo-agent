@@ -70,8 +70,7 @@ The prototype follows a commitments-on-chain, data-off-chain pattern:
 - NFT metadata contains only the decision commitment, not confidential claim text.
 
 This is a technical prototype for hackathon demonstration, not a production claims platform. `pUSDC` is
-a self-minted testnet demo token, not real USDC. The proof photos used by the hosted demo are functional
-placeholders for computer-vision testing and are not included in the public repository.
+a self-minted testnet demo token, not real USDC.
 
 ## Local Development
 
@@ -83,10 +82,6 @@ node --env-file=.env.local scripts/setup-settlement.mjs
 pnpm dev
 pnpm test
 ```
-
-The app builds without bundled proof photos. To run the exact local visual demo, provide your own images
-under `public/proofs/` using the filenames referenced by the prepared scenarios, or use uploaded image
-references through the app.
 
 ## Submission Links
 
