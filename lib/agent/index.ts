@@ -20,22 +20,17 @@ import { tppEvaluatorPlugin } from "@/lib/plugins/tpp-evaluator";
 
 /**
  * The single agent loop. The orchestrator model drives the tool-loop; the Hedera
- * Agent Kit tools execute on-chain in AUTONOMOUS mode. The HcsAuditTrailHook
- * enforces an immutable HCS audit entry for every fund-moving / token-minting
- * tool call, independent of what the model decides to log.
+ * Agent Kit tools execute on-chain in AUTONOMOUS mode. Public ledger payloads stay
+ * proof-only: the custom adjudication tool anchors a salted commitment, and the
+ * prompt can call core Hedera Agent Kit tools for proof-only HCS/NFT artifacts.
  */
 export function runAgent(messages: ModelMessage[]) {
   const client = getOperatorClient();
 
   const topicId = process.env.HCS_TOPIC_ID;
-  // HcsAuditTrailHook is hard-coded to read .transactionId from the tool result,
-  // so it only works on transactional tools (transfer/mint). It throws on
-  // query-only tools like adjudicate_claim — we log those via an explicit
-  // submit_topic_message call from the prompt instead. (Filed as Day-5 feedback.)
-  // Audit-log every fund-moving / minting call. Both the fungible and NFT mint
-  // tools are watched so the enforced audit trail holds whichever receipt is
-  // configured (NFT mint only fires when HTS_RECEIPT_NFT_TOKEN_ID is set).
-  const hooks = topicId
+  // Verbose tool audit logs include tool names/params. Keep them opt-in so the public
+  // demo topic remains proof-only by default (commitment hashes + consensus metadata).
+  const hooks = topicId && process.env.ENABLE_VERBOSE_HCS_TOOL_AUDIT === "1"
     ? [new HcsAuditTrailHook([TRANSFER_HBAR_TOOL, MINT_FUNGIBLE_TOKEN_TOOL, MINT_NON_FUNGIBLE_TOKEN_TOOL], topicId)]
     : [];
 

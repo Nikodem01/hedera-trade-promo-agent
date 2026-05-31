@@ -254,12 +254,9 @@ guidance), so Hedera becomes the neutral, tamper-proof *notary* a DB can't be.
   shipped Report-Only first to not break the inline-style UI — flip to enforced after a visual check).
   `import 'server-only'` on key modules (vitest aliases it to a no-op shim). Host hardening in
   `docs/DEPLOY.md`. **Dedicated low-balance testnet account** for public deploys caps blast radius.
-- **Exposure model (founder asked "should anonymous users run adjudication?" → no):** SOTA for public
-  demos of expensive AI+chain actions is an interactive *scripted* demo + read-only trust center, with
-  the live backend gated. So `PUBLIC_READONLY=1` → anonymous visitors get the scripted Adjudication tour
-  (`/preview`'s deterministic console, embedded) + read-only views; the live agent + all fund-touching
-  actions require the operator token (`OPERATOR_ACCESS_TOKEN` via `x-operator-token`/`op_token` cookie).
-  `/api/config` tells the client which mode; an unlock field flips public→operator for the session.
+- **Exposure model (superseded by v2.6):** the public demo originally used a scripted tour + operator
+  unlock. v2.6 keeps the cached anchor but adds a rate-limited live sandbox and removes the operator
+  unlock from the public chrome.
 - **UI = app shell + 4 workspaces (NOT a BI dashboard — that furniture stays cut).** `app/console/Shell.tsx`
   wraps the existing audit-grade design system: Adjudication (live/scripted), Trust Center (public ledger
   + NEW `AccessLog` of disclosure/override/dispute events + operator audit query), Model Risk (the strip
@@ -285,13 +282,26 @@ guidance), so Hedera becomes the neutral, tamper-proof *notary* a DB can't be.
 - **Model: `gemini-3.1-flash-lite-preview`.** Gemini 3.1 Pro is paid-tier only on the project key
   (free-tier quota 0); flash-lite produced a textbook result (correct ask-back, plausible boxes, reviewer
   concurrence), so the demo stamps the model that actually ran and that live operator mode uses.
-- **Captured artifacts (testnet, all resolve on HashScan):** pass-1 `request_more_evidence` anchored at
-  HCS seq 56, pass-2 `partial_credit` at seq 57 (commitment `22323729…`); settlement schedule
-  `0.0.9104144` executed (escrow→retailer 18.75 pUSDC, both consent signatures); attestation NFT serial
-  `4` carries the commitment. Every value independently re-verified against the mirror node before patch.
+- **Captured artifacts (testnet, all resolve on HashScan):** this development capture was superseded by
+  the clean Week 2 public capture in v2.6 below. Every value was independently re-verified against the
+  mirror node before patch.
   `FEATURED` in `app/console/data.ts` now holds these real values verbatim; only display labels
   (claimId/contractId/submittedAt/submittedBy) frame the demo, and pass-1 credit% is shown as 0 (no
   credit until evidence). The selective-disclosure package now genuinely verifies via `/api/verify`
   (self-contained: re-derives Merkle proofs + reads the commitment back from the mirror node).
 - **Deploy IP corrected:** the prod box is `140.238.202.68` (promoproof.liftbyai.com), not the
   `161.33.234.128` in the old runbook — `docs/DEPLOY_PROMOPROOF.md` fixed.
+
+## v2.6 — clean Week 2 public topic + unified demo (2026-05-31)
+- **Clean proof-only HCS topic created:** `0.0.9104996`. The public demo now points at this fresh topic
+  instead of the older mixed-history development topic. New captured records on this topic contain only
+  proof-only adjudication commitments: salted Merkle root, keyed image fingerprint, schema/kind, and
+  timestamp.
+- **Featured run recaptured on the clean topic:** pass-1 `request_more_evidence` anchored at seq 1; pass-2
+  `partial_credit` anchored at seq 2 (commitment `a0d2162e…`); settlement schedule `0.0.9105009`
+  executed for 18.75 pUSDC; attestation NFT serial `5`.
+- **Topic-per-claim decision:** deferred. One clean topic per public demo/workspace is the safer deadline
+  posture: easier for judges to inspect, easier for `/api/verify` to prove, and still confidential because
+  privacy is enforced by proof-only payloads rather than topic fragmentation.
+- **Public demo unified:** public visitors see a single interactive surface with a cached anchor plus a
+  rate-limited live sandbox. The separate operator unlock is no longer part of the public chrome.

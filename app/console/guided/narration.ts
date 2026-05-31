@@ -118,9 +118,9 @@ export function narrate(phase: Phase, ctx: NarrateCtx): SceneCopy {
     case "verify":
       return {
         stepLabel: "Provable to anyone",
-        heading: "Prove any single fact against that public record — and reveal nothing else.",
+        heading: "Prove the result and the reasoning against that public record — and reveal nothing else.",
         plain:
-          "Here's the payoff. Years later, in a dispute, you can take one line of the private file — the decision, or the amount — and prove it's genuine and unaltered against the fingerprint on Hedera. The contract and the photo never have to leave your vault. Sealed in public, provable on demand, confidential always.",
+          "Here's the payoff. Years later, in a dispute, you can take selected lines of the private file — the decision, economics, and the agent's reasoning logic — and prove they're genuine and unaltered against the fingerprint on Hedera. The contract and the photo never have to leave your vault. Sealed in public, provable on demand, confidential always.",
       };
 
     case "settle":

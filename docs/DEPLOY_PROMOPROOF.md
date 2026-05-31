@@ -10,7 +10,7 @@ deps + the traced fixtures).
 
 > **Secrets:** `.env.production` (gitignored) already holds your app keys + freshly-generated
 > `OPERATOR_ACCESS_TOKEN` / `DOSSIER_ENC_KEY` / `IMAGE_FP_KEY` and `PUBLIC_READONLY=1`. Read the operator
-> token from that file locally when you need to unlock live mode in the browser. Never paste it anywhere.
+> token from that file locally when you need privileged back-office routes. Never paste it anywhere.
 
 Run everything below **from WSL** (where the build + key live). Commands are copy-paste.
 

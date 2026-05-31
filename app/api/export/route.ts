@@ -3,6 +3,7 @@
 // retailers and CPGs exchange for deductions). Each row references the on-chain
 // commitment, so finance can independently verify any line years later.
 import { allDossiers } from "@/lib/dossier-store";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,8 @@ function rows(ds: { fields: { label: string; value: string }[]; commitment: stri
 }
 
 export async function GET(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "export", limit: 20, windowMs: 60_000 } });
+  if (denied) return denied;
   const format = new URL(req.url).searchParams.get("format") ?? "csv";
   const data = rows(await allDossiers());
 

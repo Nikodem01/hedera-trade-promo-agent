@@ -407,6 +407,33 @@ export const FEATURED: FeaturedClaim = {
             right: true
           }
         ]
+      },
+      {
+        label: "reasoning_summary",
+        value: "The retailer successfully executed the display requirements, including the use of an FSDU, proper product placement, and themed signage. However, as established by the point-of-sale scan log and compliance report provided in the follow-up evidence, the display was only active for three weeks of the four-week contract window. Pursuant to clause (a) and the pro-rata provision in clause (f), the settlement is adjusted to 75% of the maximum 25 HBAR, resulting in a payment of 18.75 HBAR.",
+        salt: "8130ca90ff4b976cbd3eeaeb4b104b76",
+        proof: [
+          {
+            hash: "5c2160af37670d9cb439f2af0d21ae6994e61116638fb276321922e5fd3249ee",
+            right: false
+          },
+          {
+            hash: "97f353e86290c7b725df20e6b44911181609a18ea8cbdb268b97d020689a6c7d",
+            right: false
+          },
+          {
+            hash: "e8e04a2c2c28c893fee80d3d5bb81e8c887ddc85166db0aa97e4b4e701ee4272",
+            right: true
+          },
+          {
+            hash: "ef354d09d1106f25df8696bf962e481e6b9056b5b0a694f9b36efe8502049165",
+            right: false
+          },
+          {
+            hash: "cd2b96cf89ac5d18954037d92c16037f68d70b587d3488ef29a09d7683cdc473",
+            right: true
+          }
+        ]
       }
     ]
   }

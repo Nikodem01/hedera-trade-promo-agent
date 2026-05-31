@@ -40,6 +40,7 @@ const nextConfig: NextConfig = {
   // (server component) reads the bespoke contract text from examples/contracts.
   outputFileTracingIncludes: {
     "/api/agent": ["./public/proofs/**"],
+    "/api/demo/live": ["./public/proofs/**", "./examples/contracts/**"],
     "/": ["./examples/contracts/**"],
     "/api/quality": ["./docs/validation/**"],
   },

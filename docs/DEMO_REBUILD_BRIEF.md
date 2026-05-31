@@ -57,7 +57,7 @@ sides: the AI judgement is auditable, and the settlement is trustless + confiden
 7. **Trust/governance layer:** model-risk evidence, a provable HCS-anchored access log, dispute/
    chargeback as a linked on-chain record, and an **AP2 (Agent Payments Protocol)** payment-mandate
    export. Show each with a one-line "why it matters."
-8. **Real on-chain artifacts** (testnet): HCS topic `0.0.9069962`, attestation NFT `0.0.9088330`, pUSDC
+8. **Real on-chain artifacts** (testnet): HCS topic `0.0.9104996`, attestation NFT `0.0.9088330`, pUSDC
    `0.0.9089483`, brand `0.0.9089484` → retailer `0.0.9089486`. Make these clickable (HashScan).
 
 ## The current UI (what you're working with)
@@ -148,9 +148,9 @@ If they can't answer those from watching, it is **not done**. Optimize for that,
   built, tested, and deployed; you're crafting explanatory UX on existing components + deterministic
   data, not new tech. Ship scope: the guided public walkthrough, polished enough to record the ≤90s
   video and to stand as the live URL. Move fast; do not relitigate the week or scope.
-- Deployed: promoproof.liftbyai.com (Oracle box; `PUBLIC_READONLY=1`; operator token unlocks live mode).
+- Deployed: promoproof.liftbyai.com (Oracle box; `PUBLIC_READONLY=1`; unified cached anchor + live sandbox).
   Build is **standalone** (`output: "standalone"`); deploy via `docs/DEPLOY_PROMOPROOF.md` (build locally,
   rsync the bundle, `systemctl restart promoproof`).
 - Verify locally with `pnpm dev`; `pnpm build` + `pnpm test` must stay green; the founder records the
-  ≤90s video from the (deterministic) guided walkthrough.
+  ≤90s video from the unified public demo.
 - Work on a feature branch; small focused commits; keep the no-drain invariant and the gate intact.

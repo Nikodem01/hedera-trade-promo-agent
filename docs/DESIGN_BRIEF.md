@@ -148,7 +148,7 @@ const cadburySettlement: SettlementProposal = {
 
 // HashScan links to render in the receipt (testnet)
 const links = {
-  hcsAudit:  "https://hashscan.io/testnet/topic/0.0.9069962",
+  hcsAudit:  "https://hashscan.io/testnet/topic/0.0.9104996",
   htsReceipt:"https://hashscan.io/testnet/token/0.0.9069963",
   hbarXfer:  "https://hashscan.io/testnet/transaction/0.0.9067781-1779890985-756797660",
 };

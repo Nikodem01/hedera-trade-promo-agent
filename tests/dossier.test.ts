@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildDossier, discloseFields, verifyDisclosure, commitmentRecord, type DossierInput } from "../lib/dossier";
+import { leafHash } from "../lib/merkle";
 
 const baseInput = (): DossierInput => ({
   contract_text: "§1.1 Display must run May 1–31. §2.1 Four facings minimum.",
@@ -74,5 +75,12 @@ describe("dossier commitment + selective disclosure", () => {
     expect(a.image_fp).toBe(b.image_fp); // same photo bytes, different claim
     expect(a.commitment).not.toBe(b.commitment); // different claim → different commitment
     expect(a.image_fp).not.toBe(c.image_fp); // different photo
+  });
+
+  it("canonicalizes text line endings before byte folding", () => {
+    const salt = Buffer.from("00112233445566778899aabbccddeeff", "hex");
+    expect(leafHash(salt, "reasoning_summary", "line one\r\nline two").toString("hex")).toBe(
+      leafHash(salt, "reasoning_summary", "line one\nline two").toString("hex"),
+    );
   });
 });

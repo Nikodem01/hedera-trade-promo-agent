@@ -38,6 +38,8 @@ fingerprint per decision. Everything confidential lives in a server-side dossier
    - **in code**: `buildDossier` captures every field as a per-leaf-salted Merkle leaf
      (`lib/merkle.ts`), computes `commitment` (root) + `image_fp` (HMAC of photo bytes); `putDossier`
      stores it; `anchorCommitment` submits the proof-only `{schema, commitment, image_fp, ts}` to HCS.
+     The live sandbox also instructs the agent to invoke the core `submit_topic_message_tool` with the
+     same proof-only JSON so the Week 2 Agent Kit tool path is visible; no business data is included.
    - returns assessment + `provenance {commitment, image_fp, model, adjudicated_at}` + `anchor {seq…}`.
 2. Negotiation: `request_more_evidence` → ask, stop; on reply re-adjudicate (handles `NEW_IMAGE_REF`).
 3. `compute_settlement(decision, recommended_credit_pct, max_settlement_hbar)` → capped amount.

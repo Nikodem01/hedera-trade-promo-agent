@@ -3,6 +3,7 @@
 // (the escrow); each mutually-consented settlement releases from it to the retailer.
 // This reads the live balances so the console can show the fund drawing down.
 import { getOperatorClient } from "@/lib/hedera/client";
+import { requireAccess } from "@/lib/guard";
 import { AccountBalanceQuery } from "@hiero-ledger/sdk";
 
 export const runtime = "nodejs";
@@ -10,7 +11,9 @@ export const dynamic = "force-dynamic";
 
 const UNIT = 1_000_000;
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "escrow", limit: 40, windowMs: 60_000 } });
+  if (denied) return denied;
   const token = process.env.PUSDC_TOKEN_ID;
   const brand = process.env.BRAND_TREASURY_ID;
   const retailer = process.env.RETAILER_ACCOUNT_ID;

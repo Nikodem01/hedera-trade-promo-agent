@@ -4,7 +4,7 @@ A Hedera Agent Kit v4 plugin for trade-promotion proof-of-performance adjudicati
 
 ## Tools
 
-### `adjudicate_claim` (multimodal judgement — Claude Opus 4.7)
+### `adjudicate_claim` (multimodal judgement)
 Reads a bespoke promotion contract, examines the proof photo, and weighs the retailer's narrative in a single multimodal call. Returns a typed `ComplianceAssessment`:
 
 - `decision`: `approve | partial_credit | reject | request_more_evidence | escalate_human`
@@ -19,8 +19,11 @@ Parameters: `contract_text`, `image_ref` (filename in `examples/proofs/` or an h
 ### `compute_settlement` (deterministic enforcement — no LLM)
 Turns a decision into an HBAR amount. `approve → 100%`, `partial_credit → recommended %`, everything else `→ 0`. The result is hard-capped at both the contract maximum and a global safety ceiling (`SETTLEMENT_HARD_CAP_HBAR`, default 50), so a payout can never be inflated beyond what the contract allows — regardless of the model's recommendation.
 
+### `propose_settlement` (scheduled pUSDC proposal)
+Creates a Hedera Scheduled Transaction for the computed pUSDC settlement. It does not execute the payout: the schedule waits for the brand approver and retailer signatures.
+
 ## Design
 
 The LLM does what code cannot (read prose, judge a messy photo, resolve ambiguity, negotiate); deterministic code does what it does better (enforce caps, compute the payout). The agent has no authority to choose a payout amount or recipient on its own.
 
-Both tools are query-only `BaseTool`s (`shouldSecondaryAction → false`) — they perform no Hedera transaction. Settlement on-chain is handled by the kit's built-in HCS/HTS/HBAR tools, gated behind explicit human approval.
+The plugin is intentionally narrow: the model judges and proposes, deterministic code caps amounts and fixes recipients, and Hedera consensus enforces the two-signature settlement before funds can move.

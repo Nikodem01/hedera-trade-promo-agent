@@ -6,9 +6,9 @@ import proposeSettlementTool, { PROPOSE_SETTLEMENT } from "./propose-settlement"
 /**
  * tpp-evaluator — the load-bearing adjudication plugin.
  *
- * Two tools: `adjudicate_claim` (Opus 4.7 multimodal judgement) and
- * `compute_settlement` (deterministic, capped enforcement). Everything on-chain
- * is handled by the kit's built-in HCS/HTS/HBAR tools.
+ * Three tools: `adjudicate_claim` (multimodal judgement + confidential dossier),
+ * `compute_settlement` (deterministic, capped enforcement), and
+ * `propose_settlement` (scheduled mutual-consent pUSDC settlement).
  */
 export const tppEvaluatorPlugin: Plugin = {
   name: "tpp-evaluator",

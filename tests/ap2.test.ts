@@ -12,7 +12,7 @@ describe("AP2 payment mandate", () => {
     payerAccount: "0.0.1111",
     payeeAccount: "0.0.2222",
     scheduleId: "0.0.3333",
-    topicId: "0.0.9069962",
+    topicId: "0.0.9104996",
     createdAt: "2026-05-30T12:00:00.000Z",
   });
 

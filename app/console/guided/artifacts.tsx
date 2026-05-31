@@ -13,6 +13,13 @@ import {
 } from "ai";
 import type { FeaturedClaim } from "../data";
 import { HASHSCAN } from "../data";
+import { buildPaymentMandate } from "@/lib/ap2";
+import type {
+  ComplianceAssessmentType,
+  ReviewerAssessmentType,
+  SettlementProposalType,
+} from "@/lib/plugins/tpp-evaluator/schemas";
+import { VerdictCard, type CardScenario } from "../components";
 import { DocSeal, ExternalIcon, truncMid } from "../primitives";
 import { ProofLink, Spinner } from "./GuidedScene";
 
@@ -134,8 +141,11 @@ function toolArgs(name: string, input: unknown): string {
 
 /** The prepared live-sandbox claim (mirrors /api/demo/live's LIVE_SANDBOX — display only). */
 const LIVE_CLAIM = {
+  claimId: "LIVE-SANDBOX-01",
+  contractId: HASHSCAN.hcsAuditId,
   retailer: "Retailer_W",
   promotion: "Brand_O floor display",
+  maxHbar: 30,
   imageRef: "oreo.jpg",
   narrative:
     "Freestanding OREO display tower installed beside the dairy case for all of May, with the branded OREO header card and well over four facings across the unit, fully stocked. Photo attached.",
@@ -160,6 +170,7 @@ const LEDGER_TOOLS = new Set([
 
 type LiveToolPart = { state?: string; input?: unknown; output?: unknown; errorText?: string };
 type ToolUIPart = Parameters<typeof getToolOrDynamicToolName>[0];
+type StreamPart = Parameters<typeof isToolOrDynamicToolUIPart>[0];
 
 /** One streamed tool call — a spinner + live "Invoking Hedera Agent Kit…" line while it
  * runs, resolving to a checked result row when the output lands. */
@@ -207,31 +218,158 @@ function LiveTextBubble({ text }: { text: string }) {
   );
 }
 
+type LiveProvenance = { commitment: string; image_fp?: string; model?: string; adjudicated_at?: string };
+type LiveAnchor = { topicId?: string; sequenceNumber?: number; transactionId?: string };
+
+function isAssessment(out: Record<string, unknown> | null): out is ComplianceAssessmentType & {
+  provenance?: LiveProvenance;
+  anchor?: LiveAnchor | null;
+  citations?: { ref: string; verified: boolean }[];
+  review?: ReviewerAssessmentType;
+} {
+  return !!out &&
+    typeof out.decision === "string" &&
+    typeof out.confidence === "number" &&
+    typeof out.recommended_credit_pct === "number" &&
+    typeof out.max_settlement_hbar === "number" &&
+    Array.isArray(out.criteria) &&
+    typeof out.reasoning_summary === "string";
+}
+
+function liveToolOutput(parts: StreamPart[], name: string): Record<string, unknown> | null {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (!isToolOrDynamicToolUIPart(p)) continue;
+    if (getToolOrDynamicToolName(p) !== name) continue;
+    const out = parseJSON((p as LiveToolPart).output);
+    if (out) return out;
+  }
+  return null;
+}
+
+function numberField(out: Record<string, unknown> | null, key: string): number | null {
+  const v = out?.[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function stringField(out: Record<string, unknown> | null, key: string): string | null {
+  const v = out?.[key];
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+function LiveSettlementCard({
+  assessment,
+  settlement,
+  proposal,
+  nft,
+}: {
+  assessment: ComplianceAssessmentType;
+  settlement: SettlementProposalType | null;
+  proposal: Record<string, unknown> | null;
+  nft: Record<string, unknown> | null;
+}) {
+  const settling = assessment.decision === "approve" || assessment.decision === "partial_credit";
+  const scheduleId = stringField(proposal, "scheduleId");
+  const amount = settlement?.amount_hbar ?? numberField(settlement, "amount") ?? null;
+  if (!settling && !scheduleId && !nft) return null;
+  return (
+    <div className="anim-stream-in rounded-[5px] overflow-hidden" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+      <div className="px-5 py-3 hairline-b flex items-center justify-between gap-2 flex-wrap" style={{ background: "linear-gradient(180deg, var(--emerald-bg), var(--paper))" }}>
+        <div className="flex flex-col leading-tight">
+          <span className="mono text-[10px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--emerald)" }}>Live settlement artifacts</span>
+          <span className="text-[13px] font-semibold mt-0.5">
+            {amount == null ? "Settlement computed" : <><span className="mono tabular-nums">{amount}</span> pUSDC</>} · mutual-consent schedule
+          </span>
+        </div>
+        {scheduleId && (
+          <a href={HASHSCAN.scheduleUrl(scheduleId)} target="_blank" rel="noreferrer" className="mono text-[11px] flex items-center gap-1.5" style={{ color: "var(--emerald)" }}>
+            schedule {scheduleId}<ExternalIcon size={11} />
+          </a>
+        )}
+      </div>
+      <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="rounded-[4px] p-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <Lbl>Computed amount</Lbl>
+          <div className="mono text-[16px] font-semibold mt-1">{amount ?? "—"} pUSDC</div>
+          <div className="mono text-[9.5px] mt-1" style={{ color: "var(--ink-faint)" }}>{assessment.recommended_credit_pct}% credit · cap {assessment.max_settlement_hbar}</div>
+        </div>
+        <div className="rounded-[4px] p-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <Lbl>Scheduled transfer</Lbl>
+          <div className="mono text-[12px] font-semibold mt-1">{scheduleId ?? "awaiting tool output"}</div>
+          <div className="mono text-[9.5px] mt-1" style={{ color: "var(--ink-faint)" }}>agent proposes; humans sign</div>
+        </div>
+        <div className="rounded-[4px] p-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <Lbl>Proof-only attestation</Lbl>
+          <div className="mono text-[12px] font-semibold mt-1">{nft ? "minted" : "pending"}</div>
+          <div className="mono text-[9.5px] mt-1" style={{ color: "var(--ink-faint)" }}>NFT metadata is commitment-only</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiveProofSummary({ assessment }: { assessment: ReturnType<typeof liveToolOutput> }) {
+  if (!assessment) return null;
+  const provenance = assessment.provenance && typeof assessment.provenance === "object" ? assessment.provenance as LiveProvenance : null;
+  const anchor = assessment.anchor && typeof assessment.anchor === "object" ? assessment.anchor as LiveAnchor : null;
+  const commitment = provenance?.commitment;
+  if (!commitment && !anchor) return null;
+  return (
+    <div className="anim-stream-in rounded-[5px] p-4 grid grid-cols-1 sm:grid-cols-3 gap-2" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px rgba(11,93,59,0.22)" }}>
+      <div>
+        <Lbl>Live Merkle root</Lbl>
+        <div className="mono text-[11.5px] break-all mt-1" title={commitment}>{commitment ? truncMid(commitment, 14, 10) : "computed"}</div>
+      </div>
+      <div>
+        <Lbl>HCS anchor</Lbl>
+        <div className="mono text-[11.5px] mt-1">{anchor?.sequenceNumber ? `seq #${anchor.sequenceNumber}` : "proof-only submit streamed"}</div>
+      </div>
+      <div>
+        <Lbl>Image fingerprint</Lbl>
+        <div className="mono text-[11.5px] break-all mt-1" title={provenance?.image_fp}>{provenance?.image_fp ? truncMid(provenance.image_fp, 12, 8) : "keyed hash"}</div>
+      </div>
+    </div>
+  );
+}
+
 /** Live testnet sandbox — the whole timeline as a streaming column. Hitting Run calls the
  * real LLM + Hedera testnet via /api/demo/live; each tool call and reasoning chunk appends
  * downward (chatbot-style) with active loading state, and the viewport auto-anchors to the
  * newest content as it generates. The verified run stays the stable proof if quota is out. */
 export function LiveColumn() {
-  const { messages, sendMessage, status, error, clearError } = useChat({
+  const { messages, setMessages, sendMessage, status, error, clearError } = useChat({
     transport: new DefaultChatTransport({ api: "/api/demo/live" }),
   });
   const busy = status === "submitted" || status === "streaming";
   const ran = messages.length > 0;
   const stream = messages.filter((m) => m.role === "assistant").flatMap((m) => m.parts);
+  const adjudicationOut = liveToolOutput(stream, "adjudicate_claim");
+  const liveAssessment = isAssessment(adjudicationOut) ? adjudicationOut : null;
+  const settlementOut = liveToolOutput(stream, "compute_settlement") as SettlementProposalType | null;
+  const proposalOut = liveToolOutput(stream, "propose_settlement");
+  const nftOut = liveToolOutput(stream, "mint_non_fungible_token_tool");
   const quotaish = error && /429|rate|quota|too many/i.test(error.message);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scenario: CardScenario = {
+    retailer: LIVE_CLAIM.retailer,
+    promotion: LIVE_CLAIM.promotion,
+    claimId: LIVE_CLAIM.claimId,
+    contractId: LIVE_CLAIM.contractId,
+    maxHbar: liveAssessment?.max_settlement_hbar ?? LIVE_CLAIM.maxHbar,
+  };
 
   // Auto-anchor the viewport to the newest content while the agent is streaming. The
-  // signature changes as text grows and tool states advance, so the scroll keeps pace.
+  // signature changes as text grows, tool states advance, and rich verdict cards inject.
   const sig = stream
     .map((p) => (isTextUIPart(p) ? `t${p.text.length}` : isToolOrDynamicToolUIPart(p) ? `x${(p as LiveToolPart).state}` : ""))
-    .join("|");
+    .join("|") + `|v${liveAssessment?.decision ?? ""}|s${stringField(proposalOut, "scheduleId") ?? ""}`;
   useEffect(() => {
-    if (busy) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [sig, busy]);
+    if (ran) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [sig, ran]);
 
   function run() {
     clearError();
+    setMessages([]);
     sendMessage({ text: "Run the prepared live sandbox claim." });
   }
 
@@ -301,6 +439,20 @@ export function LiveColumn() {
             if (isToolOrDynamicToolUIPart(p)) return <LiveToolRow key={`x${i}`} part={p} />;
             return null;
           })}
+          {liveAssessment && (
+            <>
+              <VerdictCard
+                assessment={liveAssessment}
+                scenario={scenario}
+                imageSrc={src}
+                citations={liveAssessment.citations}
+                review={liveAssessment.review}
+                unit="pUSDC"
+              />
+              <LiveProofSummary assessment={adjudicationOut} />
+              <LiveSettlementCard assessment={liveAssessment} settlement={settlementOut} proposal={proposalOut} nft={nftOut} />
+            </>
+          )}
           {busy && (
             <div className="grid grid-cols-[18px_1fr] gap-3 anim-stream-in">
               <div className="pt-0.5"><Spinner size={13} /></div>
@@ -369,7 +521,7 @@ export function OnChainOffChainSplit({ claim }: { claim: FeaturedClaim }) {
           <a href={HASHSCAN.hcsAudit} target="_blank" rel="noreferrer" className="self-start mt-1 mono text-[11px] flex items-center gap-1.5" style={{ color: "var(--emerald)" }}>
             view topic {HASHSCAN.hcsAuditId} on HashScan <ExternalIcon size={11} />
           </a>
-          <div className="mono text-[10px]" style={{ color: "var(--ink-faint)" }}>No amounts, parties, or reasoning — ever.</div>
+          <div className="mono text-[10px]" style={{ color: "var(--ink-faint)" }}>No plaintext amounts, parties, or reasoning — ever.</div>
         </div>
       </div>
     </div>
@@ -411,8 +563,11 @@ function cat(...arrs: Uint8Array[]): Uint8Array<ArrayBuffer> {
 async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
 }
+function normalizeMerkleText(value: string): string {
+  return value.replace(/\r\n?/g, "\n");
+}
 async function computeLeaf(saltHex: string, label: string, value: string): Promise<Uint8Array> {
-  return sha256(cat(B_LEAF, hexToBytes(saltHex), B_SEP, TEXT.encode(label), B_SEP, TEXT.encode(value)));
+  return sha256(cat(B_LEAF, hexToBytes(saltHex), B_SEP, TEXT.encode(label), B_SEP, TEXT.encode(normalizeMerkleText(value))));
 }
 async function foldToRoot(leaf: Uint8Array, proof: { hash: string; right: boolean }[]): Promise<Uint8Array> {
   let acc = leaf;
@@ -427,6 +582,7 @@ const NICE_LABEL: Record<string, string> = {
   decision: "Decision",
   recommended_credit_pct: "Credit %",
   max_settlement_hbar: "Contract max",
+  reasoning_summary: "Reasoning / logic",
 };
 
 type ComputedRow = { label: string; value: string; salt: string; leafHex: string; rootHex: string; ok: boolean };
@@ -507,11 +663,11 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
             <span style={{ color: "var(--ink-faint)" }}>🔒</span>
             <Lbl>Private off-chain dossier · the fields you choose to reveal</Lbl>
           </div>
-          <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             {claim.disclosure.revealed.map((r) => (
-              <div key={r.label} className="flex flex-col gap-1 rounded-[3px] p-2.5" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+              <div key={r.label} className={"flex flex-col gap-1 rounded-[3px] p-2.5" + (r.label === "reasoning_summary" ? " sm:col-span-2 lg:col-span-1" : "")} style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
                 <Lbl>{NICE_LABEL[r.label] ?? r.label}</Lbl>
-                <span className="mono text-[13px] font-semibold" style={{ color: "var(--ink)" }}>{r.value.replace(/_/g, " ")}</span>
+                <span className={(r.label === "reasoning_summary" ? "serif italic text-[12.5px] leading-snug" : "mono text-[13px] font-semibold")} style={{ color: "var(--ink)" }}>{r.value.replace(/_/g, " ")}</span>
                 <span className="mono text-[10px]" style={{ color: "var(--ink-faint)" }} title={r.salt}>salt&nbsp;{r.salt.slice(0, 8)}…{r.salt.slice(-4)}</span>
               </div>
             ))}
@@ -526,7 +682,7 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
         {/* Stage 2 — the per-field leaf hashes, recomputed live in the browser. */}
         <div className="rounded-[5px] px-4 py-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
           <Lbl>Leaf hash per field · recomputed in your browser</Lbl>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {(rows ?? claim.disclosure.revealed.map((r) => ({ label: r.label, leafHex: "" }))).map((r) => (
               <div key={r.label} className="mono text-[10.5px] truncate" style={{ color: "var(--ink-2)" }} title={"leafHex" in r ? r.leafHex : ""}>
                 <span style={{ color: "var(--ink-faint)" }}>{NICE_LABEL[r.label] ?? r.label}: </span>
@@ -545,7 +701,7 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
           <div className="mono text-[12px] break-all" style={{ color: "var(--ink)" }}>{computedRoot}</div>
           <div className="mono text-[10px] flex items-center gap-1.5" style={{ color: allOk ? "var(--emerald)" : "var(--ink-faint)" }}>
             <span>{allOk ? "✓" : "…"}</span>
-            <span>{allOk ? "all three inclusion proofs fold to this one root" : "computing…"}</span>
+            <span>{allOk ? `all ${rows.length} inclusion proofs fold to this one root` : "computing…"}</span>
           </div>
         </div>
 
@@ -585,7 +741,7 @@ export function VerifyReplay({ claim }: { claim: FeaturedClaim }) {
         </div>
 
         <p className="text-[12px] leading-snug mt-3" style={{ color: "var(--ink-mute)" }}>
-          The contract, the photo, and the reasoning never leave your vault — only these three fields were disclosed, and they provably belong to the record anchored on Hedera at seq #{seqShown}.
+          The contract and the photo never leave your vault. The disclosed result fields and the agent&rsquo;s reasoning/logic block provably belong to the record anchored on Hedera at seq #{seqShown}.
         </p>
       </div>
     </div>
@@ -635,6 +791,101 @@ export function SettleReplay({ claim }: { claim: FeaturedClaim }) {
 
 /** Scene 8 — recap: the real on-chain artifacts, the live URL, and a single quiet link
  * to the operator depth (never a governance lecture). */
+function VaultRow({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: "emerald" | "amber" | "blue" }) {
+  const color = accent === "emerald" ? "var(--emerald)" : accent === "amber" ? "var(--amber)" : accent === "blue" ? "var(--blue)" : "var(--ink)";
+  return (
+    <div className="rounded-[4px] p-3 min-w-0" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+      <Lbl>{label}</Lbl>
+      <div className="mono text-[12px] font-semibold mt-1 truncate" style={{ color }} title={value}>{value}</div>
+      {sub && <div className="text-[11px] leading-snug mt-1" style={{ color: "var(--ink-faint)" }}>{sub}</div>}
+    </div>
+  );
+}
+
+function GovernanceVault({ claim }: { claim: FeaturedClaim }) {
+  const assessment = claim.revisedAssessment ?? claim.assessment;
+  const citationOk = claim.citations.filter((c) => c.verified).length;
+  const mandate = buildPaymentMandate({
+    commitment: claim.commitment,
+    decision: assessment.decision,
+    amount: claim.amountPusdc ?? 0,
+    network: "testnet",
+    payerAccount: HASHSCAN.brandId,
+    payeeAccount: HASHSCAN.retailerId,
+    scheduleId: claim.scheduleId ?? undefined,
+    topicId: HASHSCAN.hcsAuditId,
+    createdAt: "2026-05-31T10:23:02.009Z",
+  });
+  const access = [
+    { actor: "Analyst_R", action: "opened sealed claim dossier", hash: "67c843b6fcb7c114666bd334cb0d8d31cd685d52407c301d68c7d91ca66ccadb" },
+    { actor: "Auditor_A", action: "requested reasoning disclosure", hash: "17f7fa8e0b157e6de966c5b8fafe12091174e2aad5010ea7c91352b86a973647" },
+    { actor: "BrandApprover_B", action: "signed settlement schedule", hash: "f1e69d31e92cd0863624972e601d10999ed47c090d59b4af21d660ba54218dc4" },
+  ];
+
+  return (
+    <details open className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1.5px var(--emerald)" }}>
+      <summary className="px-5 py-3 cursor-pointer select-none hairline-b" style={{ background: "linear-gradient(180deg, var(--emerald-bg), var(--paper))" }}>
+        <span className="mono text-[10.5px] uppercase tracking-[0.14em] font-semibold" style={{ color: "var(--emerald)" }}>
+          [ 🛡️ Enterprise Governance &amp; Audit Vault (Simulated Admin View) ]
+        </span>
+      </summary>
+      <div className="px-5 py-4 flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-[12.5px] leading-snug max-w-[760px]" style={{ color: "var(--ink-mute)" }}>
+            Read-only forensic view for auditors: model-risk controls, access proofs, dispute posture, and AP2 mandate payload. Public ledger entries remain proof-only; sensitive contents stay in the sealed dossier.
+          </p>
+          <span className="mono text-[9.5px] uppercase tracking-[0.14em] px-2 py-1 rounded-sm" style={{ color: "var(--emerald)", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>
+            read-only
+          </span>
+        </div>
+
+        <section>
+          <Lbl>Model-risk evidence logs</Lbl>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2">
+            <VaultRow label="Model lineage" value={claim.model} sub="captured with the adjudication dossier" />
+            <VaultRow label="2nd-model review" value={claim.review.agrees ? "concurred" : claim.review.recommended_action} sub={claim.review.concern === "none" ? "no material concern" : claim.review.concern} accent="emerald" />
+            <VaultRow label="Citation integrity" value={`${citationOk}/${claim.citations.length} clauses`} sub="contract references verified" accent={citationOk === claim.citations.length ? "emerald" : "amber"} />
+            <VaultRow label="Human-control gate" value="mutual consent" sub="agent proposes; parties sign on-chain" accent="blue" />
+          </div>
+        </section>
+
+        <section>
+          <Lbl>Provable access logs · hashed actors and actions</Lbl>
+          <div className="mt-2 rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            {access.map((row, i) => (
+              <div key={row.hash} className="grid grid-cols-1 md:grid-cols-[140px_1fr_260px] gap-2 px-4 py-2.5 hairline-b text-[11.5px]">
+                <span className="mono font-semibold" style={{ color: "var(--ink)" }}>{row.actor}</span>
+                <span style={{ color: "var(--ink-mute)" }}>{row.action}</span>
+                <span className="mono truncate" title={row.hash} style={{ color: "var(--ink-faint)" }}>sha256:{i + 1}:{truncMid(row.hash, 12, 8)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-[0.85fr_1.15fr] gap-3">
+          <div className="rounded-[5px] p-4" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            <Lbl>Dispute handling metadata</Lbl>
+            <div className="mt-3 flex flex-col gap-2">
+              <Field label="Original commitment" value={truncMid(claim.commitment, 14, 10)} title={claim.commitment} />
+              <Field label="Dispute status" value="none open · linked dispute route ready" />
+              <Field label="Retention posture" value="crypto-shreddable off-chain dossier" />
+              <Field label="Settlement evidence" value={claim.scheduleId ? `schedule ${claim.scheduleId}` : "not settled"} />
+            </div>
+          </div>
+          <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            <div className="px-4 py-2.5 hairline-b" style={{ background: "var(--paper-2)" }}>
+              <Lbl>Raw AP2 payment mandate schema</Lbl>
+            </div>
+            <pre className="mono text-[10.5px] leading-[1.45] max-h-[320px] overflow-auto p-4 whitespace-pre-wrap" style={{ color: "var(--ink-2)" }}>
+              {JSON.stringify(mandate, null, 2)}
+            </pre>
+          </div>
+        </section>
+      </div>
+    </details>
+  );
+}
+
 export function Recap({ claim }: { claim: FeaturedClaim }) {
   return (
     <div className="flex flex-col gap-3">
@@ -654,6 +905,7 @@ export function Recap({ claim }: { claim: FeaturedClaim }) {
           Everything above ran on Hedera testnet — the topic, token, accounts, and schedule all resolve on HashScan. Want to watch it happen? Switch to the <b style={{ color: "var(--ink)" }}>Live testnet sandbox</b> at the top: the agent reads a fresh contract, judges the photo, and writes proof-only artifacts to the ledger in real time.
         </p>
       </div>
+      <GovernanceVault claim={claim} />
     </div>
   );
 }

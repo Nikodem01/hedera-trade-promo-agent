@@ -24,7 +24,7 @@ function safeEqual(a: string, b: string): boolean {
 /** Same-origin check: browsers attach Origin on POST, so a mismatch is a cross-site
  * (CSRF) attempt. A missing Origin means a non-browser caller (curl/server) — not a
  * CSRF vector — so it's allowed (the token check below still applies in public mode). */
-function sameOriginOk(req: Request): boolean {
+export function sameOriginOk(req: Request): boolean {
   const origin = req.headers.get("origin");
   if (!origin) return true;
   // Behind the reverse proxy the real client host is in x-forwarded-host.
@@ -45,6 +45,19 @@ function tokenFrom(req: Request): string | null {
 }
 
 export type GateOpts = { rate?: { name: string; limit: number; windowMs: number } };
+
+/** Public-but-expensive routes, such as the limited live demo, do not require the
+ * operator token but still reject browser cross-origin posts and enforce a rate cap. */
+export function requirePublicAccess(req: Request, opts: GateOpts = {}): Response | null {
+  if (!sameOriginOk(req)) {
+    return Response.json({ error: "cross-origin request rejected" }, { status: 403 });
+  }
+  if (opts.rate) {
+    const limited = rateLimit(req, opts.rate.name, opts.rate.limit, opts.rate.windowMs);
+    if (limited) return limited;
+  }
+  return null;
+}
 
 /** Returns a Response to short-circuit the handler (deny / rate-limit), or null to
  * proceed. Call at the very top of a gated route handler:

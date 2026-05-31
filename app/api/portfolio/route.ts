@@ -3,6 +3,7 @@
 // counterpart to the public commitment ledger: decision mix + settled value the
 // operator sees, computed from data that never left the server.
 import { allDossiers } from "@/lib/dossier-store";
+import { requireAccess } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +11,9 @@ export const dynamic = "force-dynamic";
 const field = (d: { fields: { label: string; value: string }[] }, label: string) =>
   d.fields.find((f) => f.label === label)?.value;
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = requireAccess(req, { rate: { name: "portfolio", limit: 40, windowMs: 60_000 } });
+  if (denied) return denied;
   const ds = await allDossiers();
   const mix: Record<string, number> = {};
   let settledValue = 0;

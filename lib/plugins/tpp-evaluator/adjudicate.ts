@@ -278,7 +278,7 @@ export class AdjudicateClaimTool extends BaseTool {
   constructor(context: Context) {
     super();
     this.description =
-      "Adjudicate a retailer's trade-promotion proof-of-performance. Reads the bespoke contract, examines the proof photo and narrative, and returns a typed assessment: a 5-way decision (approve | partial_credit | reject | request_more_evidence | escalate_human), per-criterion findings with contract clause citations, a confidence, a recommended credit %, and the contract's maximum settlement in HBAR. It also captures the full decision provenance into a confidential off-chain dossier and anchors only a proof-only commitment to HCS automatically — you do NOT need to log anything to the audit topic yourself. Call this before computing any settlement.";
+      "Adjudicate a retailer's trade-promotion proof-of-performance. Reads the bespoke contract, examines the proof photo and narrative, and returns a typed assessment: a 5-way decision (approve | partial_credit | reject | request_more_evidence | escalate_human), per-criterion findings with contract clause citations, a confidence, a recommended credit %, and the contract's maximum settlement in HBAR. It captures the full decision provenance into a confidential off-chain dossier and returns a proof-only commitment (salted Merkle root + keyed image fingerprint). Follow the system workflow for any HCS proof-only submission. Call this before computing any settlement.";
     this.parameters = adjudicateParameters(context);
   }
 

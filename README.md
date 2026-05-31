@@ -10,8 +10,8 @@
 Built for the **Hedera AI Bounty — Week 2 (Enterprise Agent + Plugin)** on the
 [Hedera Agent Kit](https://github.com/hashgraph/hedera-agent-kit-js) v4.
 
-**▶ Live:** https://promoproof.liftbyai.com (public read-only + scripted demo; operator mode runs the live agent) ·
-**On-chain (testnet):** [HCS topic](https://hashscan.io/testnet/topic/0.0.9069962) · [attestation NFT](https://hashscan.io/testnet/token/0.0.9088330) · [pUSDC](https://hashscan.io/testnet/token/0.0.9089483) ·
+**▶ Live:** https://promoproof.liftbyai.com (cached anchor + rate-limited live sandbox) ·
+**On-chain (testnet):** [HCS topic](https://hashscan.io/testnet/topic/0.0.9104996) · [attestation NFT](https://hashscan.io/testnet/token/0.0.9088330) · [pUSDC](https://hashscan.io/testnet/token/0.0.9089483) ·
 **Agent-payments standard:** [AP2-aligned payment mandate](docs/AP2.md), backed by Hedera consensus.
 
 ## The problem
@@ -113,7 +113,7 @@ adjudication** — the on-chain proof is what's load-bearing, not any single ven
 
 | Primitive | Why | Artifact |
 |---|---|---|
-| HCS | Neutral, immutable **commitment** ledger (proof-only) | topic [`0.0.9069962`](https://hashscan.io/testnet/topic/0.0.9069962) |
+| HCS | Neutral, immutable **commitment** ledger (proof-only) | topic [`0.0.9104996`](https://hashscan.io/testnet/topic/0.0.9104996) |
 | HTS (fungible) | `pUSDC` stablecoin settlement unit (prod: Circle USDC) | token [`0.0.9089483`](https://hashscan.io/testnet/token/0.0.9089483) |
 | HTS (NFT) | Unique per-settlement attestation (metadata = commitment) | token [`0.0.9088330`](https://hashscan.io/testnet/token/0.0.9088330) |
 | Scheduled tx + receiver-sig | Mutual-consent settlement (brand + retailer co-sign) | brand `0.0.9089484` → retailer `0.0.9089486` |

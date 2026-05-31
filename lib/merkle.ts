@@ -13,9 +13,16 @@ const SEP = Buffer.from([0x1f]); // unit separator between salt/label/value
 
 const sha256 = (...parts: Buffer[]) => createHash("sha256").update(Buffer.concat(parts)).digest();
 
+/** Canonicalize text before byte folding. We normalize transport line endings only:
+ * broader Unicode normalization would change already-captured legal/source text bytes
+ * and invalidate existing Hedera-anchored commitments. */
+export function normalizeMerkleText(value: string): string {
+  return value.replace(/\r\n?/g, "\n");
+}
+
 /** Hash one labelled, salted field into a leaf. `value` may be text or raw bytes. */
 export function leafHash(salt: Buffer, label: string, value: string | Buffer): Buffer {
-  const valueBuf = Buffer.isBuffer(value) ? value : Buffer.from(value, "utf-8");
+  const valueBuf = Buffer.isBuffer(value) ? value : Buffer.from(normalizeMerkleText(value), "utf-8");
   return sha256(LEAF, salt, SEP, Buffer.from(label, "utf-8"), SEP, valueBuf);
 }
 
