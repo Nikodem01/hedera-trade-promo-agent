@@ -1,6 +1,6 @@
 # Deploy → promoproof.liftbyai.com (your Oracle box)
 
-Same server as liftbyai: **Oracle Cloud, Ubuntu 24.04, `161.33.234.128`, Nginx**, SSH `ubuntu@…` with
+Same server as liftbyai: **Oracle Cloud, Ubuntu 24.04, `140.238.202.68`, Nginx**, SSH `ubuntu@…` with
 key `oracle_amd`. liftbyai is static; **PromoProof is a Next.js Node app**, so it runs as a service and
 nginx reverse-proxies the subdomain — exactly like `n8n.liftbyai.com`.
 
@@ -22,7 +22,7 @@ merge PR #1 then PR #2 into `main` (your call).
 
 ### 1. DNS — add the subdomain (you, ~2 min + propagation)
 Wherever `liftbyai.com` DNS is managed, add an **A record**:
-`promoproof.liftbyai.com → 161.33.234.128`.
+`promoproof.liftbyai.com → 140.238.202.68`.
 - If that DNS is on **Cloudflare proxied (orange cloud)**, TLS is handled by Cloudflare → you can skip
   certbot (step 6) and make nginx listen on `:80`. Tell me and I'll give you the HTTP-only block.
 - Otherwise (default below) we issue a Let's Encrypt cert with certbot.
@@ -30,7 +30,7 @@ Wherever `liftbyai.com` DNS is managed, add an **A record**:
 ### 2. One-time: copy your SSH key into WSL with safe perms
 ```bash
 mkdir -p ~/.ssh && cp /mnt/c/Users/domin/.ssh/oracle_amd ~/.ssh/oracle_amd && chmod 600 ~/.ssh/oracle_amd
-KEY=~/.ssh/oracle_amd; H=ubuntu@161.33.234.128; APP=/var/www/promoproof
+KEY=~/.ssh/oracle_amd; H=ubuntu@140.238.202.68; APP=/var/www/promoproof
 ```
 
 ### 3. One-time: prep the server (Node 20 + app dir)

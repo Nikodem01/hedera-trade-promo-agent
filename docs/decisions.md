@@ -266,3 +266,32 @@ guidance), so Hedera becomes the neutral, tamper-proof *notary* a DB can't be.
   promoted to a full MRM view), Settlement & Fund (accrual + portfolio + NEW `Dispute` raise UI). Client-
   side workspace switching keeps the live agent stream mounted (`hidden`); the live `Console` was slimmed
   to the Adjudication body (its 5 trailing panels moved into workspaces; `onRunComplete` refreshes them).
+
+## v2.5 — featured "Life of a Claim" run captured live on-chain (2026-05-31)
+- **The capture was blocked by a Next gotcha, not tooling flakiness.** The dev capture utility lived at
+  `app/api/_capture/route.ts`; a leading-underscore folder is a Next **private folder** (opted out of
+  routing), so `POST /api/_capture` 404'd. Renamed to `app/api/capture`; dev-only gating is the
+  `PUBLIC_READONLY` 403 guard *inside* the handler (403 on any public deploy), not the folder name.
+- **Zero-chain `dryRun` mode added to the capture route** (no client → `adjudicate` never anchors; skip
+  propose/sign/mint), so the exact decisions/boxes/settlement are previewed BEFORE any on-chain write —
+  the literal implementation of "don't fire a real tx blind." Results persist to a file and are read back
+  independently, robust to dropped command output.
+- **Hero arc = honest partial-credit, not approve.** A dry run showed the model approves 100% on the
+  original contract (clause (a) only required "live within the window"). To make partial-credit the
+  TRUTHFUL outcome (not coaxed), `examples/contracts/02-cadbury-easter-display.txt` clauses (a)/(f) were
+  rewritten to require the FULL four-week window with a pro-rata fee. Evidence of "3 of 4 weeks" then
+  yields a defensible 75% → 18.75 pUSDC, which the model derives itself ("3 of the 4 contracted weeks…
+  pro-rated at 75%").
+- **Model: `gemini-3.1-flash-lite-preview`.** Gemini 3.1 Pro is paid-tier only on the project key
+  (free-tier quota 0); flash-lite produced a textbook result (correct ask-back, plausible boxes, reviewer
+  concurrence), so the demo stamps the model that actually ran and that live operator mode uses.
+- **Captured artifacts (testnet, all resolve on HashScan):** pass-1 `request_more_evidence` anchored at
+  HCS seq 56, pass-2 `partial_credit` at seq 57 (commitment `22323729…`); settlement schedule
+  `0.0.9104144` executed (escrow→retailer 18.75 pUSDC, both consent signatures); attestation NFT serial
+  `4` carries the commitment. Every value independently re-verified against the mirror node before patch.
+  `FEATURED` in `app/console/data.ts` now holds these real values verbatim; only display labels
+  (claimId/contractId/submittedAt/submittedBy) frame the demo, and pass-1 credit% is shown as 0 (no
+  credit until evidence). The selective-disclosure package now genuinely verifies via `/api/verify`
+  (self-contained: re-derives Merkle proofs + reads the commitment back from the mirror node).
+- **Deploy IP corrected:** the prod box is `140.238.202.68` (promoproof.liftbyai.com), not the
+  `161.33.234.128` in the old runbook — `docs/DEPLOY_PROMOPROOF.md` fixed.

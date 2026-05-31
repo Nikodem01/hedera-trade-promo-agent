@@ -121,27 +121,46 @@ export const HASHSCAN = {
   scheduleUrl,
 };
 
-const FEATURED_CONTRACT = `TRADE PROMOTION AGREEMENT — SEASONAL FREESTANDING DISPLAY
-Brand: Mondelēz International / Cadbury ("Brand")  |  Retailer: Woolworths ("Retailer")
-Promotion: Cadbury Easter Freestanding Display Unit (FSDU)  |  Agreement No. WOW-CAD-EAS-2026
+const FEATURED_CONTRACT = `CO-OPERATIVE MARKETING SCHEDULE — SEASONAL FLOOR DISPLAY
+Between Mondelez International (the "Supplier") and Woolworths Group (the "Merchant")
+Re: Cadbury Easter 2026 Freestanding Seasonal Display
+Schedule reference: WOW/CADB/EAST-2026
 
-SECTION 1. TERM
-1.1  The display shall be live during the Promotion Window of March 23, 2026 through
-     April 20, 2026 inclusive (the Easter trading period). Settlement is conditioned on
-     the display being verifiably live within this window.
+(a)  Display window. The seasonal display shall be live and maintained on the sales
+     floor for the full four-week Easter selling period — March 23 through April 20,
+     2026 inclusive. Settlement is conditional on the Merchant demonstrating the
+     duration the display was live within this window; a display live for only part of
+     the window is settled proportionately under clause (f), not in full.
 
-SECTION 2. EXECUTION REQUIREMENTS
-2.1  (b) Placement. A freestanding display unit (FSDU) shall be sited front-of-store or
-     in a primary actionway — not an in-aisle shelf.
-2.2  (c) Facings. A minimum of six (6) facings of Cadbury Creme Egg shall be presented.
-2.3  (d) Signage. The unit shall carry Easter-themed Cadbury signage.
-2.4  (a) Timing proof. Settlement requires evidence the display was live on or before
-     April 20, 2026 — e.g. a dated point-of-sale report or a timestamped photo.`;
+(b)  Location. The feature shall be presented on a freestanding seasonal display unit
+     (FSDU), distinct from plain in-line gondola shelving. A high-traffic position
+     (actionway, end-of-aisle, or entrance zone) is preferred.
+
+(c)  Product presentation. A prominent presentation of the Cadbury Easter range
+     (e.g. Creme Egg, Caramel, or other Cadbury Easter egg lines) on or about the unit.
+
+(d)  Theming. Easter-themed signage bearing the Cadbury mark must be affixed to the unit.
+
+(e)  Evidence. The Merchant shall provide an in-store photograph and a brief narrative.
+     Where the photograph alone does not establish how long the display was live within
+     the window in (a) — for example where no date is visible — the Supplier may request
+     supplementary proof of timing (e.g. a point-of-sale timestamp or a dated compliance
+     report) before settling.
+
+(f)  Consideration. Subject to verification, the Supplier shall remit a co-operative
+     marketing fee of up to 25 HBAR (testnet demonstration denomination) for a display
+     live across the full window in (a). For partial fulfilment, the fee is pro-rated by
+     the share of the four-week window the display was verifiably live (e.g. three of the
+     four contracted weeks settles at 75%).
+`;
 
 /**
- * BUILD-TIME SCAFFOLD (replaced by a captured real run in Stage 6). A full negotiation
- * arc over the real Cadbury photo, so every guided scene — including the clause↔photo
- * cross-highlight and the negotiation beat — can be built and verified.
+ * REAL captured run (Hedera testnet, 2026-05-31 07:20:22 UTC) — replaces the former scaffold.
+ * Every on-chain value resolves on HashScan: pass-1 + pass-2 commitments anchored to HCS
+ * (final seq 57), settlement schedule 0.0.9104144 executed (18.75 pUSDC), attestation
+ * NFT serial 4. Captured via POST /api/capture (dev-only; 403 on public deploy).
+ * Model + chain values are verbatim; only display labels (claimId/contractId/submittedAt/
+ * submittedBy) frame the demo, and pass-1 credit% is shown as 0 (no credit until evidence).
  */
 export const FEATURED: FeaturedClaim = {
   retailer: "Woolworths",
@@ -153,70 +172,153 @@ export const FEATURED: FeaturedClaim = {
   submittedAt: "2026-04-22 09:48 UTC",
   submittedBy: "J. Okonkwo (Woolworths Merch)",
   contractText: FEATURED_CONTRACT,
-  narrative:
-    "Cadbury Easter FSDU placed in a front-of-store actionway with full Easter signage and six Creme Egg facings. Display ran the contracted window. Requesting settlement.",
+  narrative: "Cadbury Easter FSDU placed in a front-of-store actionway with full Easter signage and a prominent Creme Egg presentation. The display ran across the Easter selling period. Requesting settlement of the co-op marketing fee.",
   imageRef: "Cadbury-Woolworths-Easter-POS-Unit_1.jpg",
   assessment: {
     decision: "request_more_evidence",
-    confidence: 0.56,
+    confidence: 0.95,
     recommended_credit_pct: 0,
     max_settlement_hbar: 25,
     criteria: [
-      { requirement: "Freestanding unit, front-of-store", clause_ref: "(b)", status: "met", observed_in_photo: "Freestanding Cadbury FSDU in an open actionway, not an in-aisle shelf.", concern: "", box: [180, 280, 950, 760] },
-      { requirement: "Minimum 6 Creme Egg facings", clause_ref: "(c)", status: "met", observed_in_photo: "Six+ Creme Egg facings visible across the mid shelves.", concern: "", box: [470, 330, 740, 720] },
-      { requirement: "Easter-themed Cadbury signage", clause_ref: "(d)", status: "met", observed_in_photo: "Cadbury Easter header card affixed to the top of the unit.", concern: "", box: [140, 320, 320, 740] },
-      { requirement: "Display live within the Easter window (ends Apr 20)", clause_ref: "(a)", status: "indeterminate", observed_in_photo: "No date is visible anywhere in the photo.", concern: "Cannot confirm the display was live on/before Apr 20 from the image alone." },
+      {
+        requirement: "Display window: March 23 through April 20, 2026.",
+        clause_ref: "Section (a)",
+        status: "indeterminate",
+        observed_in_photo: "The photograph does not contain a date, timestamp, or any contextual marker to verify the date of capture or the duration the display was maintained.",
+        concern: "The critical requirement to verify the full four-week duration cannot be confirmed from a static image without a timestamp."
+      },
+      {
+        requirement: "Location: Freestanding seasonal display unit (FSDU).",
+        clause_ref: "Section (b)",
+        status: "met",
+        observed_in_photo: "A circular freestanding display unit is positioned in the actionway, distinct from the adjacent in-line gondola shelving.",
+        concern: "",
+        box: [424, 386, 932, 601]
+      },
+      {
+        requirement: "Product presentation: Prominent presentation of Cadbury Easter range.",
+        clause_ref: "Section (c)",
+        status: "met",
+        observed_in_photo: "Cadbury Easter product is visible on the shelves of the FSDU and prominently displayed on the adjacent gondola unit.",
+        concern: "",
+        box: [442, 401, 560, 582]
+      },
+      {
+        requirement: "Theming: Easter-themed signage with Cadbury mark.",
+        clause_ref: "Section (d)",
+        status: "met",
+        observed_in_photo: "The FSDU features a rabbit topper and 'Salted Caramel' signage containing the Cadbury logo, which satisfies the Easter theming and branding requirement.",
+        concern: "",
+        box: [277, 437, 335, 497]
+      }
     ],
-    reasoning_summary:
-      "Placement, facings, and signage are clearly met, but the contract conditions payment on the display being live within the Easter window and the photo carries no date. Requesting a timing proof before settling.",
-    evidence_requested:
-      "A point-of-sale timestamp or a dated compliance report confirming the display was live on or before April 20, 2026.",
+    reasoning_summary: "The retailer successfully fulfilled the visual requirements, including the placement of an FSDU in a high-traffic zone, prominent Cadbury Easter branding, and product presentation. However, the contract specifically requires proof of the display's duration across the April 2026 window. Since the submitted photo lacks a date or timestamp, the duration cannot be verified. Compliance is indeterminate for the timing requirement per Clause (a).",
+    evidence_requested: "Please provide a dated compliance report, a store system timestamp, or a secondary photograph from a different date within the promotional window to confirm the display was maintained for the required duration."
   },
   review: { agrees: true, concern: "none", recommended_action: "accept" },
   citations: [
-    { ref: "(b)", verified: true },
-    { ref: "(c)", verified: true },
-    { ref: "(d)", verified: true },
-    { ref: "(a)", verified: true },
+    { ref: "Section (a)", verified: true },
+    { ref: "Section (b)", verified: true },
+    { ref: "Section (c)", verified: true },
+    { ref: "Section (d)", verified: true }
   ],
-  evidenceReply:
-    "Attached: POS log {2026-04-04 → 2026-04-16}, signed compliance report PDF (dated 2026-04-20). Display ran 12 of 29 contracted days.",
+  evidenceReply: "Point-of-sale scan log confirms the display planogram went live on March 30, 2026 — one week into the contracted window — and remained live through end of day April 20, 2026: three of the four contracted weeks. Signed store compliance report dated April 20, 2026 attached.",
   revisedAssessment: {
     decision: "partial_credit",
-    confidence: 0.82,
+    confidence: 1,
     recommended_credit_pct: 75,
     max_settlement_hbar: 25,
     criteria: [
-      { requirement: "Freestanding unit, front-of-store", clause_ref: "(b)", status: "met", observed_in_photo: "Freestanding Cadbury FSDU in an open actionway, not an in-aisle shelf.", concern: "", box: [180, 280, 950, 760] },
-      { requirement: "Minimum 6 Creme Egg facings", clause_ref: "(c)", status: "met", observed_in_photo: "Six+ Creme Egg facings visible across the mid shelves.", concern: "", box: [470, 330, 740, 720] },
-      { requirement: "Easter-themed Cadbury signage", clause_ref: "(d)", status: "met", observed_in_photo: "Cadbury Easter header card affixed to the top of the unit.", concern: "", box: [140, 320, 320, 740] },
-      { requirement: "Display live within the Easter window (ends Apr 20)", clause_ref: "(a)", status: "partial", observed_in_photo: "POS log confirms the display live Apr 04 – Apr 16 (12 of 29 contracted days).", concern: "Live for 12 of 29 contracted days — pro-rate to 75%." },
+      {
+        requirement: "Live for full 4-week window (March 23 - April 20, 2026)",
+        clause_ref: "Section (a)",
+        status: "partial",
+        observed_in_photo: "The retailer admits, and POS data confirms, the display was live from March 30, 2026, to April 20, 2026.",
+        concern: "The display was missing for the first week of the contracted window (March 23 - March 29).",
+        box: [207, 375, 966, 608]
+      },
+      {
+        requirement: "Freestanding seasonal display unit (FSDU)",
+        clause_ref: "Section (b)",
+        status: "met",
+        observed_in_photo: "A circular freestanding display unit is positioned in the actionway.",
+        concern: "",
+        box: [207, 375, 966, 608]
+      },
+      {
+        requirement: "Prominent presentation of Cadbury Easter range",
+        clause_ref: "Section (c)",
+        status: "met",
+        observed_in_photo: "The display unit is stocked with Cadbury branded Easter products.",
+        concern: "",
+        box: [207, 375, 966, 608]
+      },
+      {
+        requirement: "Easter-themed signage bearing the Cadbury mark",
+        clause_ref: "Section (d)",
+        status: "met",
+        observed_in_photo: "The display unit features 'Salted Caramel' signage with visible Cadbury/Dairy Milk branding.",
+        concern: "",
+        box: [433, 436, 545, 563]
+      }
     ],
-    reasoning_summary:
-      "The timing evidence resolves the open clause but shows the display ran 12 of 29 contracted days. Pro-rated to 75% credit, capped at the contract maximum.",
+    reasoning_summary: "The retailer has provided photographic evidence of the compliant FSDU installation and followed up with POS data and a compliance report confirming the display was live from March 30, 2026, to April 20, 2026. This equates to 3 out of the 4 contracted weeks. Pursuant to Clause (f), the 25 HBAR maximum settlement is pro-rated at 75% for partial fulfillment, resulting in a payment of 18.75 HBAR."
   },
   settlement: {
     amount_hbar: 18.75,
     partial_credit_pct: 75,
     max_settlement_hbar: 25,
-    justification: "Partial compliance — 75% credit applied after timing was confirmed, capped at the contract maximum.",
+    justification: "Partial compliance — 75% credit applied, capped at the contract maximum (25 HBAR) and the 50 HBAR safety cap."
   },
   amountPusdc: 18.75,
-  scheduleId: "0.0.9091820",
-  nftSerial: "7",
-  commitment: "2cc1ae0b9f3d4c7a8e6b15d2f0a37c94e8b1d6452a9f0c3e7b8d145a90e2f5d9",
-  imageFp: "9f3d4c7a8e6b15d2f0a37c94e8b1d6452a9f0c3e7b8d145a90e2f5d92cc1ae0b",
-  seq: 41901,
-  consensusTs: "2026-04-22 14:31:02 UTC",
-  model: "claude-opus-4-7",
+  scheduleId: "0.0.9104144",
+  nftSerial: "4",
+  commitment: "22323729f4d0b504f333c6b22a93b51870966c2a9f27fd1994375dbe268ed04e",
+  imageFp: "80d8d9c333bbd52f90c63600bef0dc1b18429dfcf3113988db5681a2cf2bbfd4",
+  seq: 57,
+  consensusTs: "2026-05-31 07:20:22 UTC",
+  model: "gemini-3.1-flash-lite-preview",
   disclosure: {
-    commitment: "2cc1ae0b9f3d4c7a8e6b15d2f0a37c94e8b1d6452a9f0c3e7b8d145a90e2f5d9",
+    commitment: "22323729f4d0b504f333c6b22a93b51870966c2a9f27fd1994375dbe268ed04e",
     revealed: [
-      { label: "decision", value: "partial_credit", salt: "00000000000000000000000000000000", proof: [] },
-      { label: "recommended_credit_pct", value: "75", salt: "00000000000000000000000000000000", proof: [] },
-      { label: "max_settlement_hbar", value: "25", salt: "00000000000000000000000000000000", proof: [] },
-    ],
-  },
+      {
+        label: "decision",
+        value: "partial_credit",
+        salt: "edcc1f3e78e0909dcaf319fe07550f51",
+        proof: [
+          { hash: "5eb2433baa5bcfed10978af5c212b25998428b8d1f912b65e2313a922c5e10d2", right: false },
+          { hash: "2abd6e5937efaa7c6e1b84ae2c6c108d7006c9d00c212e4010e1b595cfe7d24e", right: false },
+          { hash: "b05cab60a4ffef7847d4b11b2d2fdb22f105d56cf53b44fb3550faf5c4268551", right: false },
+          { hash: "480c63e62e280271d1f0128b293299450e0ef71de3749e2c0504e0d1a283e497", right: true },
+          { hash: "4157840c8118e7b42b9c288516188659e42ba26a4b02d5a5132f6e5c3c8e6757", right: true }
+        ]
+      },
+      {
+        label: "recommended_credit_pct",
+        value: "75",
+        salt: "514f02f487d29cb2e3899788259207eb",
+        proof: [
+          { hash: "6e1f7d4cf6e868818c2fd00d36b8b995692692a33c95d9a47aba3181a15546c5", right: false },
+          { hash: "2cae119ee2f36c92793d133549c1bd4298a040844da3058c9d280c3a49d9e2b9", right: true },
+          { hash: "16dd80610809564ac16b655a24c05401c0e326146b7c3790753e3e0313cf880a", right: true },
+          { hash: "e1752a452d8936a4b59a4f261b4756c53e920911e9a9330722f01d1631aae95a", right: false },
+          { hash: "4157840c8118e7b42b9c288516188659e42ba26a4b02d5a5132f6e5c3c8e6757", right: true }
+        ]
+      },
+      {
+        label: "max_settlement_hbar",
+        value: "25",
+        salt: "fbc4777edfb0f92a3016719168503cc6",
+        proof: [
+          { hash: "16fb84e04ea66376a2c38e78d128a64f74a78e111b0a067ee5903530d941ac82", right: true },
+          { hash: "e7ad21c0e44062f0df95d7eddacc5f91ecee9b92780134693de0cdea81835032", right: false },
+          { hash: "16dd80610809564ac16b655a24c05401c0e326146b7c3790753e3e0313cf880a", right: true },
+          { hash: "e1752a452d8936a4b59a4f261b4756c53e920911e9a9330722f01d1631aae95a", right: false },
+          { hash: "4157840c8118e7b42b9c288516188659e42ba26a4b02d5a5132f6e5c3c8e6757", right: true }
+        ]
+      }
+    ]
+  }
 };
 
 /** The agent's tool calls for the featured claim, by phase — the plugin in action. */
