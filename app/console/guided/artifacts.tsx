@@ -14,6 +14,7 @@ import {
 import type { FeaturedClaim } from "../data";
 import { HASHSCAN } from "../data";
 import { buildPaymentMandate } from "@/lib/ap2";
+import { LIVE_SANDBOX } from "@/lib/live-sandbox";
 import type {
   ComplianceAssessmentType,
   ReviewerAssessmentType,
@@ -138,18 +139,6 @@ function toolArgs(name: string, input: unknown): string {
   const s = typeof input === "string" ? input : JSON.stringify(input);
   return s.length > 90 ? s.slice(0, 90) + "..." : s;
 }
-
-/** The prepared live-sandbox claim (mirrors /api/demo/live's LIVE_SANDBOX — display only). */
-const LIVE_CLAIM = {
-  claimId: "LIVE-SANDBOX-01",
-  contractId: HASHSCAN.hcsAuditId,
-  retailer: "Retailer_W",
-  promotion: "Brand_O floor display",
-  maxHbar: 30,
-  imageRef: "oreo.jpg",
-  narrative:
-    "Freestanding OREO display tower installed beside the dairy case for all of May, with the branded OREO header card and well over four facings across the unit, fully stocked. Photo attached.",
-};
 
 /** Plain-language "what's happening right now" while each Agent Kit tool runs. */
 const RUNNING_LABEL: Record<string, string> = {
@@ -332,6 +321,372 @@ function LiveProofSummary({ assessment }: { assessment: ReturnType<typeof liveTo
   );
 }
 
+function LiveStep({
+  step,
+  label,
+  title,
+  children,
+}: {
+  step: number;
+  label: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline gap-3">
+        <span className="mono text-[10px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--blue)" }}>{label}</span>
+        <span className="mono text-[10px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-faint)" }}>Step {step} of 9</span>
+      </div>
+      <div className="text-[18px] md:text-[20px] font-semibold tracking-[-0.01em] leading-tight">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function LiveInputAssets({ src, busy, ran, onRun }: { src: string; busy: boolean; ran: boolean; onRun: () => void }) {
+  return (
+    <div className="rounded-[5px] p-4 grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+      <div className="rounded-[4px] overflow-hidden" style={{ boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={`Proof photo — ${LIVE_SANDBOX.promotion}`} className="w-full h-[140px] object-cover" />
+      </div>
+      <div className="min-w-0 flex flex-col gap-3">
+        <div>
+          <Lbl>Prepared claim</Lbl>
+          <div className="text-[14px] font-semibold mt-0.5">{LIVE_SANDBOX.retailer} · {LIVE_SANDBOX.promotion}</div>
+        </div>
+        <blockquote className="serif pl-3 text-[12.5px] leading-snug border-l-2 italic" style={{ borderColor: "var(--keyline-2)", color: "var(--ink-2)" }}>
+          “{LIVE_SANDBOX.narrative}”
+        </blockquote>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <details className="rounded-[4px] overflow-hidden" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            <summary className="cursor-pointer px-3 py-2 mono text-[10.5px] uppercase tracking-[0.14em] font-semibold" style={{ color: "var(--ink)" }}>
+              [ 📄 THE BESPOKE CONTRACT ]
+            </summary>
+            <pre className="mono text-[10.5px] leading-[1.55] max-h-[280px] overflow-auto px-3 pb-3 whitespace-pre-wrap" style={{ color: "var(--ink-2)" }}>{LIVE_SANDBOX.contractText}</pre>
+          </details>
+          <details open className="rounded-[4px] overflow-hidden" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            <summary className="cursor-pointer px-3 py-2 mono text-[10.5px] uppercase tracking-[0.14em] font-semibold" style={{ color: "var(--ink)" }}>
+              [ 📝 RETAILER NARRATIVE ]
+            </summary>
+            <div className="serif italic text-[12.5px] leading-snug px-3 pb-3" style={{ color: "var(--ink-2)" }}>{LIVE_SANDBOX.narrative}</div>
+          </details>
+        </div>
+        <button
+          onClick={onRun}
+          disabled={busy}
+          className="self-start mt-1 mono text-[11px] uppercase tracking-[0.14em] font-semibold px-4 py-2.5 rounded-[3px] inline-flex items-center gap-2"
+          style={{
+            background: busy ? "var(--paper-sunken)" : "var(--ink)",
+            color: busy ? "var(--ink-faint)" : "white",
+            cursor: busy ? "wait" : "pointer",
+          }}
+        >
+          {busy ? <><Spinner size={12} color="var(--ink-faint)" /> Running…</> : ran ? "↻ Run again" : "▶ Run live adjudication"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LiveNegotiationStatus({ assessment }: { assessment: ComplianceAssessmentType }) {
+  const needsEvidence = assessment.decision === "request_more_evidence";
+  return (
+    <div className="rounded-[5px] p-4" style={{ background: needsEvidence ? "var(--blue-bg)" : "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+      <Lbl>{needsEvidence ? "Evidence negotiation opened" : "No evidence gap found"}</Lbl>
+      <p className="text-[12.5px] leading-snug mt-2" style={{ color: "var(--ink-mute)" }}>
+        {needsEvidence
+          ? assessment.evidence_requested ?? "The agent requested a targeted follow-up artifact before settlement."
+          : "The live inputs satisfied the timing, placement, branding, facings, and stock checks. The agent can proceed from adjudication to proof-only commitment and settlement proposal without a follow-up evidence round."}
+      </p>
+    </div>
+  );
+}
+
+function LivePrivatePublicSplit({ assessment }: { assessment: ReturnType<typeof liveToolOutput> }) {
+  const provenance = assessment?.provenance && typeof assessment.provenance === "object" ? assessment.provenance as LiveProvenance : null;
+  const anchor = assessment?.anchor && typeof assessment.anchor === "object" ? assessment.anchor as LiveAnchor : null;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+        <div className="px-5 py-3 hairline-b" style={{ background: "var(--paper-2)" }}>
+          <Lbl>Off-chain · encrypted decision dossier</Lbl>
+          <div className="text-[13px] font-semibold mt-0.5">Inputs, criteria, reasoning, and salts stay private</div>
+        </div>
+        <div className="px-5 py-4 flex flex-col gap-2 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+          <span>🔒 bespoke contract and retailer narrative</span>
+          <span>🔒 proof photo and keyed image fingerprint preimage</span>
+          <span>🔒 per-field salts and full clause-level reasoning</span>
+          <span className="mono text-[10px] mt-1" style={{ color: "var(--ink-faint)" }}>Selective disclosure reveals only chosen leaves.</span>
+        </div>
+      </div>
+      <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1.5px var(--emerald)" }}>
+        <div className="px-5 py-3 hairline-b flex items-center justify-between gap-2" style={{ background: "linear-gradient(180deg, var(--emerald-bg), var(--paper))" }}>
+          <div>
+            <span className="mono text-[9.5px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--emerald)" }}>On-chain · proof-only HCS record</span>
+            <div className="text-[13px] font-semibold mt-0.5">Commitment and timestamp, not business data</div>
+          </div>
+          <DocSeal />
+        </div>
+        <div className="px-5 py-4 flex flex-col gap-2.5">
+          <Field label="Live salted Merkle root" value={provenance?.commitment ? truncMid(provenance.commitment, 14, 10) : "computing"} title={provenance?.commitment} />
+          <Field label="Live image fingerprint" value={provenance?.image_fp ? truncMid(provenance.image_fp, 14, 10) : "keyed hash"} title={provenance?.image_fp} />
+          <Field label="HCS sequence" value={anchor?.sequenceNumber ? `#${anchor.sequenceNumber}` : "Mirror Node propagation pending"} />
+          <a href={HASHSCAN.hcsAudit} target="_blank" rel="noreferrer" className="self-start mt-1 mono text-[11px] flex items-center gap-1.5" style={{ color: "var(--emerald)" }}>
+            view topic {HASHSCAN.hcsAuditId} on HashScan <ExternalIcon size={11} />
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type LiveVerifyState = {
+  disclosure: FeaturedClaim["disclosure"] | null;
+  seq: number | null;
+  consensusTs: string | null;
+  error: string | null;
+};
+
+function formatMirrorTs(ts: string): string {
+  const secs = Number(ts.split(".")[0]);
+  if (!Number.isFinite(secs)) return ts;
+  return new Date(secs * 1000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+}
+
+function LiveVerifyReplay({ assessment }: { assessment: ReturnType<typeof liveToolOutput> }) {
+  const provenance = assessment?.provenance && typeof assessment.provenance === "object" ? assessment.provenance as LiveProvenance : null;
+  const anchor = assessment?.anchor && typeof assessment.anchor === "object" ? assessment.anchor as LiveAnchor : null;
+  const [state, setState] = useState<LiveVerifyState>({ disclosure: null, seq: anchor?.sequenceNumber ?? null, consensusTs: null, error: null });
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const commitment = provenance?.commitment;
+    if (!commitment) return;
+    (async () => {
+      try {
+        const dRes = await fetch("/api/demo/disclose", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ commitment }),
+        });
+        const disclosure = await dRes.json();
+        if (!dRes.ok) throw new Error(disclosure.error || "disclosure unavailable");
+        const vRes = await fetch("/api/verify", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(disclosure),
+        });
+        const verified = await vRes.json();
+        if (!alive) return;
+        setState({
+          disclosure,
+          seq: verified.onChain?.sequenceNumber ?? anchor?.sequenceNumber ?? null,
+          consensusTs: verified.onChain?.consensusTimestamp ? formatMirrorTs(verified.onChain.consensusTimestamp) : null,
+          error: null,
+        });
+      } catch (e) {
+        if (!alive) return;
+        setState((s) => ({ ...s, error: e instanceof Error ? e.message : "verification unavailable" }));
+      }
+    })();
+    return () => { alive = false; };
+  }, [provenance?.commitment, anchor?.sequenceNumber]);
+
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [state.disclosure, state.seq, state.consensusTs, state.error]);
+
+  if (!provenance?.commitment) {
+    return <div className="rounded-[5px] p-4 mono text-[11px]" style={{ background: "var(--paper)", color: "var(--ink-faint)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>Waiting for the live adjudication commitment…</div>;
+  }
+  if (state.error) {
+    return <div ref={ref} className="rounded-[5px] p-4 text-[12px]" style={{ background: "var(--amber-bg)", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>Live disclosure is still propagating: {state.error}</div>;
+  }
+  if (!state.disclosure) {
+    return <div ref={ref} className="rounded-[5px] p-4 mono text-[11px]" style={{ background: "var(--paper)", color: "var(--blue)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}><Spinner size={12} /> preparing selective disclosure proof…</div>;
+  }
+
+  return (
+    <div ref={ref}>
+      <VerifyReplay
+        claim={{
+          disclosure: state.disclosure,
+          seq: state.seq ?? anchor?.sequenceNumber ?? 0,
+          consensusTs: state.consensusTs ?? "Mirror Node propagation pending",
+        } as FeaturedClaim}
+      />
+    </div>
+  );
+}
+
+function LiveSettleState({
+  assessment,
+  settlement,
+  proposal,
+  nft,
+}: {
+  assessment: ComplianceAssessmentType;
+  settlement: SettlementProposalType | null;
+  proposal: Record<string, unknown> | null;
+  nft: Record<string, unknown> | null;
+}) {
+  const scheduleId = stringField(proposal, "scheduleId");
+  const amount = settlement?.amount_hbar ?? numberField(settlement, "amount") ?? 0;
+  const Sig = ({ label, who }: { label: string; who: string }) => (
+    <div className="flex-1 rounded-[4px] p-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <Lbl>{label}</Lbl>
+        <a href={who === HASHSCAN.brandId ? HASHSCAN.brand : HASHSCAN.retailer} target="_blank" rel="noreferrer" className="mono text-[10px] flex items-center gap-1" style={{ color: "var(--ink-faint)" }}>{who}<ExternalIcon size={9} /></a>
+      </div>
+      <div className="w-full mono text-[11px] uppercase tracking-[0.14em] font-semibold px-3 py-2 rounded-[3px] text-center" style={{ background: "var(--paper-2)", color: "var(--ink-mute)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>awaiting on-chain signature</div>
+    </div>
+  );
+  return (
+    <div className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1.5px var(--emerald)" }}>
+      <div className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap hairline-b" style={{ background: "linear-gradient(180deg, var(--emerald-bg), var(--paper))" }}>
+        <div className="flex flex-col leading-tight">
+          <span className="mono text-[10px] uppercase tracking-[0.16em] font-medium" style={{ color: "var(--emerald)" }}>Settlement gate · mutual consent</span>
+          <span className="text-[13px] font-semibold mt-0.5"><span className="mono tabular-nums">{amount || assessment.recommended_credit_pct}</span>{amount ? " pUSDC" : "% credit"} · brand → retailer</span>
+        </div>
+        {scheduleId && <a href={HASHSCAN.scheduleUrl(scheduleId)} target="_blank" rel="noreferrer" className="mono text-[11px] flex items-center gap-1.5" style={{ color: "var(--emerald)" }}>schedule {scheduleId}<ExternalIcon size={11} /></a>}
+      </div>
+      <div className="px-5 py-4">
+        <p className="text-[12.5px] leading-snug mb-3" style={{ color: "var(--ink-mute)" }}>
+          The live agent proposed the transfer as a Hedera Scheduled Transaction. The public sandbox stops at the safety gate: funds move only when the brand approver and retailer sign on-chain. The agent cannot release value by itself.
+        </p>
+        <div className="flex gap-3 flex-wrap">
+          <Sig label="Brand approver" who={HASHSCAN.brandId} />
+          <Sig label="Retailer" who={HASHSCAN.retailerId} />
+        </div>
+        <div className="mt-3 rounded-[4px] px-3 py-2.5 flex items-center gap-2.5 flex-wrap" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>
+          <span className="text-[13px]" style={{ color: "var(--emerald)" }}>✓</span>
+          <span className="text-[12.5px]" style={{ color: "var(--ink)" }}>Settlement proposal created on Hedera; signatures remain human-controlled.</span>
+          {nft && <a href={HASHSCAN.nftAttestation} target="_blank" rel="noreferrer" className="mono text-[10.5px] px-2 py-0.5 rounded-sm flex items-center gap-1" style={{ color: "var(--emerald)", background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>attestation NFT tool executed<ExternalIcon size={9} /></a>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LiveArtifactsRecap({ proposal }: { proposal: Record<string, unknown> | null }) {
+  const scheduleId = stringField(proposal, "scheduleId");
+  return (
+    <div className="rounded-[5px] p-5" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+      <Lbl>Live Hedera artifacts · direct testnet links</Lbl>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-3">
+        <ProofLink label="HCS audit topic" id={HASHSCAN.hcsAuditId} sub="topic" href={HASHSCAN.hcsAudit} />
+        <ProofLink label="Attestation NFT" id={HASHSCAN.nftAttestationId} sub="token" href={HASHSCAN.nftAttestation} />
+        <ProofLink label="pUSDC" id={HASHSCAN.pusdcId} sub="token" href={HASHSCAN.pusdc} />
+        <ProofLink label="Brand treasury" id={HASHSCAN.brandId} sub="account" href={HASHSCAN.brand} />
+        <ProofLink label="Retailer" id={HASHSCAN.retailerId} sub="account" href={HASHSCAN.retailer} />
+        {scheduleId && <ProofLink label="Settlement schedule" id={scheduleId} sub="schedule" href={HASHSCAN.scheduleUrl(scheduleId)} />}
+      </div>
+    </div>
+  );
+}
+
+function LiveGovernanceVault({
+  assessment,
+  rawAssessment,
+  settlement,
+  proposal,
+  nft,
+  stream,
+}: {
+  assessment: ComplianceAssessmentType;
+  rawAssessment: Record<string, unknown> | null;
+  settlement: SettlementProposalType | null;
+  proposal: Record<string, unknown> | null;
+  nft: Record<string, unknown> | null;
+  stream: StreamPart[];
+}) {
+  const provenance = rawAssessment?.provenance && typeof rawAssessment.provenance === "object" ? rawAssessment.provenance as LiveProvenance : null;
+  const anchor = rawAssessment?.anchor && typeof rawAssessment.anchor === "object" ? rawAssessment.anchor as LiveAnchor : null;
+  const scheduleId = stringField(proposal, "scheduleId");
+  const amount = settlement?.amount_hbar ?? numberField(settlement, "amount") ?? 0;
+  const [hashes, setHashes] = useState<string[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    const encoder = new TextEncoder();
+    const actions = [
+      `live-adjudication:${provenance?.commitment ?? "pending"}:${assessment.decision}`,
+      `live-hcs-anchor:${HASHSCAN.hcsAuditId}:${anchor?.sequenceNumber ?? "pending"}`,
+      `live-schedule:${scheduleId ?? "pending"}:${amount}`,
+      `live-nft-tool:${nft ? "executed" : "pending"}:${provenance?.commitment ?? "pending"}`,
+    ];
+    (async () => {
+      const out = await Promise.all(actions.map(async (a) => {
+        const digest = await crypto.subtle.digest("SHA-256", encoder.encode(a));
+        return bytesToHex(new Uint8Array(digest));
+      }));
+      if (alive) setHashes(out);
+    })();
+    return () => { alive = false; };
+  }, [provenance?.commitment, assessment.decision, anchor?.sequenceNumber, scheduleId, amount, nft]);
+
+  const toolNames = stream.filter(isToolOrDynamicToolUIPart).map((p) => getToolOrDynamicToolName(p));
+  const mandate = buildPaymentMandate({
+    commitment: provenance?.commitment ?? "pending-live-commitment",
+    decision: assessment.decision,
+    amount,
+    network: "testnet",
+    payerAccount: HASHSCAN.brandId,
+    payeeAccount: HASHSCAN.retailerId,
+    scheduleId: scheduleId ?? undefined,
+    topicId: HASHSCAN.hcsAuditId,
+    createdAt: provenance?.adjudicated_at ?? new Date().toISOString(),
+  });
+
+  return (
+    <details open className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1.5px var(--emerald)" }}>
+      <summary className="px-5 py-3 cursor-pointer select-none hairline-b" style={{ background: "linear-gradient(180deg, var(--emerald-bg), var(--paper))" }}>
+        <span className="mono text-[10.5px] uppercase tracking-[0.14em] font-semibold" style={{ color: "var(--emerald)" }}>
+          [ 🛡️ ENTERPRISE GOVERNANCE &amp; AUDIT VAULT (LIVE FORENSIC VIEW) ]
+        </span>
+      </summary>
+      <div className="px-5 py-4 flex flex-col gap-4">
+        <section>
+          <Lbl>Model-risk evidence · live run</Lbl>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2">
+            <VaultRow label="Decision" value={assessment.decision.replace(/_/g, " ")} sub={`confidence ${assessment.confidence}`} accent="emerald" />
+            <VaultRow label="Credit" value={`${assessment.recommended_credit_pct}%`} sub={`max ${assessment.max_settlement_hbar} pUSDC`} />
+            <VaultRow label="Criteria evaluated" value={String(assessment.criteria.length)} sub="clause-level findings with boxes" />
+            <VaultRow label="Tool chain" value={`${toolNames.length} calls`} sub={toolNames.join(" → ")} accent="blue" />
+          </div>
+          <pre className="mono text-[10.5px] leading-[1.45] max-h-[260px] overflow-auto mt-2 p-3 rounded-[4px] whitespace-pre-wrap" style={{ background: "var(--paper)", color: "var(--ink-2)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            {JSON.stringify({ assessment, provenance, anchor, settlement, proposal, nft }, null, 2)}
+          </pre>
+        </section>
+
+        <section>
+          <Lbl>Live access logs · cryptographic action hashes</Lbl>
+          <div className="mt-2 rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            {["adjudication dossier sealed", "proof-only HCS anchor written", "scheduled transfer proposed", "attestation metadata minted"].map((action, i) => (
+              <div key={action} className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-2 px-4 py-2.5 hairline-b text-[11.5px]">
+                <span style={{ color: "var(--ink-mute)" }}>{action}</span>
+                <span className="mono truncate" title={hashes[i]} style={{ color: "var(--ink-faint)" }}>{hashes[i] ? `sha256:${truncMid(hashes[i], 14, 10)}` : "hashing…"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+          <div className="px-4 py-2.5 hairline-b" style={{ background: "var(--paper-2)" }}>
+            <Lbl>Live AP2 payment mandate schema</Lbl>
+          </div>
+          <pre className="mono text-[10.5px] leading-[1.45] max-h-[340px] overflow-auto p-4 whitespace-pre-wrap" style={{ color: "var(--ink-2)" }}>
+            {JSON.stringify(mandate, null, 2)}
+          </pre>
+        </section>
+      </div>
+    </details>
+  );
+}
+
 /** Live testnet sandbox — the whole timeline as a streaming column. Hitting Run calls the
  * real LLM + Hedera testnet via /api/demo/live; each tool call and reasoning chunk appends
  * downward (chatbot-style) with active loading state, and the viewport auto-anchors to the
@@ -351,18 +706,18 @@ export function LiveColumn() {
   const quotaish = error && /429|rate|quota|too many/i.test(error.message);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scenario: CardScenario = {
-    retailer: LIVE_CLAIM.retailer,
-    promotion: LIVE_CLAIM.promotion,
-    claimId: LIVE_CLAIM.claimId,
-    contractId: LIVE_CLAIM.contractId,
-    maxHbar: liveAssessment?.max_settlement_hbar ?? LIVE_CLAIM.maxHbar,
+    retailer: LIVE_SANDBOX.retailer,
+    promotion: LIVE_SANDBOX.promotion,
+    claimId: LIVE_SANDBOX.claimId,
+    contractId: LIVE_SANDBOX.contractId,
+    maxHbar: liveAssessment?.max_settlement_hbar ?? LIVE_SANDBOX.maxHbar,
   };
 
   // Auto-anchor the viewport to the newest content while the agent is streaming. The
   // signature changes as text grows, tool states advance, and rich verdict cards inject.
   const sig = stream
     .map((p) => (isTextUIPart(p) ? `t${p.text.length}` : isToolOrDynamicToolUIPart(p) ? `x${(p as LiveToolPart).state}` : ""))
-    .join("|") + `|v${liveAssessment?.decision ?? ""}|s${stringField(proposalOut, "scheduleId") ?? ""}`;
+    .join("|") + `|v${liveAssessment?.decision ?? ""}|s${stringField(proposalOut, "scheduleId") ?? ""}|n${nftOut ? "1" : "0"}`;
   useEffect(() => {
     if (ran) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [sig, ran]);
@@ -373,7 +728,7 @@ export function LiveColumn() {
     sendMessage({ text: "Run the prepared live sandbox claim." });
   }
 
-  const src = `/proofs/${LIVE_CLAIM.imageRef}`;
+  const src = `/proofs/${LIVE_SANDBOX.imageRef}`;
   return (
     <section className="max-w-[1100px] w-full mx-auto px-6 md:px-8 pt-3 pb-10 anim-reveal">
       <div className="flex items-baseline gap-3 mb-2.5">
@@ -387,60 +742,53 @@ export function LiveColumn() {
         This calls the live LLM and the Hedera testnet. Each step streams in below as it happens — the agent reads the contract, judges the photo, and writes proof-only artifacts to the ledger. The verified run keeps the stable proof if the free-tier model quota is unavailable.
       </p>
 
-      {/* prepared claim context */}
-      <div className="mt-5 rounded-[5px] p-4 grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-        <div className="rounded-[4px] overflow-hidden" style={{ boxShadow: "inset 0 0 0 1px var(--keyline-2)" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt={`Proof photo — ${LIVE_CLAIM.promotion}`} className="w-full h-[140px] object-cover" />
-        </div>
-        <div className="min-w-0 flex flex-col gap-2">
-          <div>
-            <Lbl>Prepared claim</Lbl>
-            <div className="text-[14px] font-semibold mt-0.5">{LIVE_CLAIM.retailer} · {LIVE_CLAIM.promotion}</div>
-          </div>
-          <blockquote className="serif pl-3 text-[12.5px] leading-snug border-l-2 italic" style={{ borderColor: "var(--keyline-2)", color: "var(--ink-2)" }}>
-            “{LIVE_CLAIM.narrative}”
-          </blockquote>
-          <button
-            onClick={run}
-            disabled={busy}
-            className="self-start mt-1 mono text-[11px] uppercase tracking-[0.14em] font-semibold px-4 py-2.5 rounded-[3px] inline-flex items-center gap-2"
-            style={{
-              background: busy ? "var(--paper-sunken)" : "var(--ink)",
-              color: busy ? "var(--ink-faint)" : "white",
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
-            {busy ? <><Spinner size={12} color="var(--ink-faint)" /> Running…</> : ran ? "↻ Run again" : "▶ Run live adjudication"}
-          </button>
-        </div>
-      </div>
+      <div className="mt-5 flex flex-col gap-7">
+        <LiveStep step={1} label="Live inputs" title="The exact contract, narrative, and proof photo sent to the agent.">
+          <LiveInputAssets src={src} busy={busy} ran={ran} onRun={run} />
+        </LiveStep>
 
-      {error && (
-        <div className="mt-4 rounded-[4px] px-4 py-3" style={{ background: quotaish ? "var(--amber-bg)" : "var(--red-bg)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-          <div className="mono text-[10px] uppercase tracking-[0.14em] font-medium" style={{ color: quotaish ? "var(--amber)" : "var(--red)" }}>
-            {quotaish ? "Live sandbox quota reached" : "Live sandbox unavailable"}
+        {error && (
+          <div className="rounded-[4px] px-4 py-3" style={{ background: quotaish ? "var(--amber-bg)" : "var(--red-bg)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+            <div className="mono text-[10px] uppercase tracking-[0.14em] font-medium" style={{ color: quotaish ? "var(--amber)" : "var(--red)" }}>
+              {quotaish ? "Live sandbox quota reached" : "Live sandbox unavailable"}
+            </div>
+            <p className="text-[12px] leading-snug mt-1" style={{ color: "var(--ink-mute)" }}>
+              Switch to the Verified run at the top — it’s the same workflow captured from a successful live run, with real testnet hashes and verification links.
+            </p>
           </div>
-          <p className="text-[12px] leading-snug mt-1" style={{ color: "var(--ink-mute)" }}>
-            Switch to the Verified run at the top — it’s the same workflow captured from a successful live run, with real testnet hashes and verification links.
-          </p>
-        </div>
-      )}
+        )}
 
-      {/* the streaming timeline */}
-      {ran && !error && (
-        <div className="mt-4 rounded-[5px] p-4 md:p-5 flex flex-col gap-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
-          <div className="flex items-center gap-2">
-            <i className={"block w-1.5 h-1.5 rounded-full" + (busy ? " pulse-dot" : "")} style={{ background: busy ? "var(--blue)" : "var(--emerald)" }} />
-            <Lbl>{busy ? "Live on Hedera testnet · streaming" : "Run complete"}</Lbl>
-          </div>
-          {stream.map((p, i) => {
-            if (isTextUIPart(p)) return p.text.trim() ? <LiveTextBubble key={`t${i}`} text={p.text} /> : null;
-            if (isToolOrDynamicToolUIPart(p)) return <LiveToolRow key={`x${i}`} part={p} />;
-            return null;
-          })}
-          {liveAssessment && (
-            <>
+        {ran && !error && (
+          <LiveStep step={2} label="Agent tool stream" title="The real agent executes, tool by tool, against Hedera testnet.">
+            <div className="rounded-[5px] p-4 md:p-5 flex flex-col gap-3" style={{ background: "var(--paper)", boxShadow: "inset 0 0 0 1px var(--keyline)" }}>
+              <div className="flex items-center gap-2">
+                <i className={"block w-1.5 h-1.5 rounded-full" + (busy ? " pulse-dot" : "")} style={{ background: busy ? "var(--blue)" : "var(--emerald)" }} />
+                <Lbl>{busy ? "Live on Hedera testnet · streaming" : "Run complete"}</Lbl>
+              </div>
+              {stream.map((p, i) => {
+                if (isTextUIPart(p)) return p.text.trim() ? <LiveTextBubble key={`t${i}`} text={p.text} /> : null;
+                if (isToolOrDynamicToolUIPart(p)) return <LiveToolRow key={`x${i}`} part={p} />;
+                return null;
+              })}
+              {busy && (
+                <div className="grid grid-cols-[18px_1fr] gap-3 anim-stream-in">
+                  <div className="pt-0.5"><Spinner size={13} /></div>
+                  <div className="mono text-[11.5px]" style={{ color: "var(--blue)" }}>Invoking Hedera Agent Kit…</div>
+                </div>
+              )}
+              {!busy && (
+                <div className="mt-1 rounded-[4px] px-3 py-2.5 flex items-center gap-2.5 flex-wrap" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>
+                  <span className="text-[13px]" style={{ color: "var(--emerald)" }}>✓</span>
+                  <span className="text-[12px]" style={{ color: "var(--ink)" }}>Live run complete — proof-only artifacts written to Hedera testnet, nothing confidential exposed.</span>
+                </div>
+              )}
+            </div>
+          </LiveStep>
+        )}
+
+        {liveAssessment && !error && (
+          <>
+            <LiveStep step={3} label="Compliance verdict" title="Judgement, visual grounding, and the full live criteria matrix.">
               <VerdictCard
                 assessment={liveAssessment}
                 scenario={scenario}
@@ -449,25 +797,32 @@ export function LiveColumn() {
                 review={liveAssessment.review}
                 unit="pUSDC"
               />
+            </LiveStep>
+            <LiveStep step={4} label="Negotiation gate" title="The agent decides whether more evidence is required before value can move.">
+              <LiveNegotiationStatus assessment={liveAssessment} />
+            </LiveStep>
+            <LiveStep step={5} label="Recorded privately" title="The live dossier is sealed off-chain while Hedera receives only proof data.">
+              <LivePrivatePublicSplit assessment={adjudicationOut} />
+            </LiveStep>
+            <LiveStep step={6} label="Hedera commitment" title="The live proof-only commitment and image fingerprint are anchored.">
               <LiveProofSummary assessment={adjudicationOut} />
-              <LiveSettlementCard assessment={liveAssessment} settlement={settlementOut} proposal={proposalOut} nft={nftOut} />
-            </>
-          )}
-          {busy && (
-            <div className="grid grid-cols-[18px_1fr] gap-3 anim-stream-in">
-              <div className="pt-0.5"><Spinner size={13} /></div>
-              <div className="mono text-[11.5px]" style={{ color: "var(--blue)" }}>Invoking Hedera Agent Kit…</div>
-            </div>
-          )}
-          {!busy && (
-            <div className="mt-1 rounded-[4px] px-3 py-2.5 flex items-center gap-2.5 flex-wrap" style={{ background: "var(--emerald-bg)", boxShadow: "inset 0 0 0 1px var(--emerald)" }}>
-              <span className="text-[13px]" style={{ color: "var(--emerald)" }}>✓</span>
-              <span className="text-[12px]" style={{ color: "var(--ink)" }}>Live run complete — proof-only artifacts written to Hedera testnet, nothing confidential exposed.</span>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-      )}
+            </LiveStep>
+            <LiveStep step={7} label="Provable to anyone" title="The live verdict and reasoning string are proven against the public HCS record.">
+              <LiveVerifyReplay assessment={adjudicationOut} />
+            </LiveStep>
+            <LiveStep step={8} label="Settled safely" title="The live scheduled transfer exposes the mutual-signature state.">
+              <LiveSettleState assessment={liveAssessment} settlement={settlementOut} proposal={proposalOut} nft={nftOut} />
+            </LiveStep>
+            <LiveStep step={9} label="End to end" title="The live Hedera artifacts and forensic vault close the audit trail.">
+              <div className="flex flex-col gap-3">
+                <LiveArtifactsRecap proposal={proposalOut} />
+                <LiveGovernanceVault assessment={liveAssessment} rawAssessment={adjudicationOut} settlement={settlementOut} proposal={proposalOut} nft={nftOut} stream={stream} />
+              </div>
+            </LiveStep>
+          </>
+        )}
+        <div ref={bottomRef} />
+      </div>
     </section>
   );
 }
@@ -826,7 +1181,7 @@ function GovernanceVault({ claim }: { claim: FeaturedClaim }) {
     <details open className="rounded-[5px] overflow-hidden" style={{ background: "var(--paper-2)", boxShadow: "inset 0 0 0 1.5px var(--emerald)" }}>
       <summary className="px-5 py-3 cursor-pointer select-none hairline-b" style={{ background: "linear-gradient(180deg, var(--emerald-bg), var(--paper))" }}>
         <span className="mono text-[10.5px] uppercase tracking-[0.14em] font-semibold" style={{ color: "var(--emerald)" }}>
-          [ 🛡️ Enterprise Governance &amp; Audit Vault (Simulated Admin View) ]
+          [ 🛡️ ENTERPRISE GOVERNANCE &amp; AUDIT VAULT (FORENSIC VIEW) ]
         </span>
       </summary>
       <div className="px-5 py-4 flex flex-col gap-4">
